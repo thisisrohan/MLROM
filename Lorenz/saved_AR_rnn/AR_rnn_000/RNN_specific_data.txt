@@ -1,0 +1,1 @@
+{'dt_rnn': 0.1, 'T_sample_input': 10, 'T_sample_output': 10, 'T_offset': 0.1, 'N': 10000, 'boundary_idx_arr': array([10001, 20002]), 'delta_t': 0.01, 'params': None, 'return_params_arr': False}

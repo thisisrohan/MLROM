@@ -1,0 +1,1 @@
+{'data_dim': 6, 'load_dir': None}

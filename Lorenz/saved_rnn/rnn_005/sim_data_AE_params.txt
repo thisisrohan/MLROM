@@ -1,0 +1,1 @@
+{'rho_arr': array([20]), 'sigma_arr': array([10, 15]), 'beta_arr': array([1.33333333]), 'x0': 1, 'y0': 1, 'z0': 1, 't0': 0.0, 'T': 100.0, 'delta_t': 0.01, 'dir_name_ae': '/content/drive/MyDrive/Colab Notebooks/Thesis/Lorenz/saved_ae/ae_010', 'normalize_flag': True}

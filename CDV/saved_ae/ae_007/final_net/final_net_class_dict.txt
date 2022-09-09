@@ -1,0 +1,1 @@
+{'data_dim': 12, 'enc_layers': [32, 24, 16, 12, 8, 4, 3], 'dec_layers': [3, 4, 8, 12, 16, 24, 32], 'latent_space_dim': 3, 'lambda_reg': 1e-05, 'reg_name': 'L2', 'enc_layer_act_func': 'elu', 'enc_final_layer_act_func': 'tanh', 'dec_layer_act_func': 'elu', 'dec_final_layer_act_func': 'linear', 'load_file': None}

@@ -1,0 +1,1 @@
+{'rho_arr': array([20, 25]), 'sigma_arr': array([10, 15]), 'beta_arr': array([1.33333333, 2.        ]), 'x0': 1, 'y0': 1, 'z0': 1, 't0': 0.0, 'T': 100.0, 'delta_t': 0.01, 'return_params_arr': False, 'normalize_flag': True}

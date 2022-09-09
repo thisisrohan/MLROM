@@ -1,0 +1,1 @@
+{'data_dim': 2, 'dt_rnn': 0.2, 'lambda_reg': 1e-05, 'reg_name': 'L2', 'rnn_layers_units': [64, 64], 'dense_layer_act_func': 'linear', 'load_file': '/content/drive/MyDrive/Colab Notebooks/Thesis/Lorenz/saved_AR_rnn/AR_rnn_001/initial_net/RNN/final_net_class_dict.txt'}

@@ -1,0 +1,1 @@
+{'dir_name_rnn': '/content/drive/MyDrive/Colab Notebooks/Thesis/Lorenz/saved_rnn/rnn_003', 'dir_name_ae': '/content/drive/MyDrive/Colab Notebooks/Thesis/Lorenz/saved_ae/ae_010'}
