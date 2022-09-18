@@ -267,7 +267,7 @@ def create_data_for_RNN(
 
     idx_to_skip = int((dt_rnn+0.25*delta_t) // delta_t)
     # num_samples = (int(N // idx_to_skip) - num_sample_output) // num_sample_input # needs correction?
-    num_samples = int(N - (idx_offset + num_sample_output - 1)*idx_to_skip)# -1
+#     num_samples = int(N - (idx_offset + num_sample_output - 1)*idx_to_skip)# -1
 
     if params is not None:
         RNN_data_dim = data.shape[1]+params.shape[1]
@@ -276,25 +276,39 @@ def create_data_for_RNN(
         
     num_cases = len(boundary_idx_arr)
 
-    data_rnn_input = np.empty(shape=(num_cases*num_samples, num_sample_input, RNN_data_dim))
-    data_rnn_output = np.empty(shape=(num_cases*num_samples, num_sample_output, RNN_data_dim))
-
-    org_data_idx_arr_input = np.empty(shape=(num_cases*num_samples, num_sample_input), dtype=np.int32)
-    org_data_idx_arr_output = np.empty(shape=(num_cases*num_samples, num_sample_output), dtype=np.int32)
-
+    begin_idx = 0
+    total_num_samples = 0
     for i in range(len(boundary_idx_arr)):
+        N = boundary_idx_arr[i] - begin_idx
+        total_num_samples += int(N - (idx_offset + num_sample_output - 1)*idx_to_skip)
+        begin_idx = boundary_idx_arr[i]
+
+    data_rnn_input = np.empty(shape=(total_num_samples, num_sample_input, RNN_data_dim))
+    data_rnn_output = np.empty(shape=(total_num_samples, num_sample_output, RNN_data_dim))
+
+    org_data_idx_arr_input = np.empty(shape=(total_num_samples, num_sample_input), dtype=np.int32)
+    org_data_idx_arr_output = np.empty(shape=(total_num_samples, num_sample_output), dtype=np.int32)
+
+    begin_idx = 0
+    cum_samples = 0
+    for i in range(len(boundary_idx_arr)):
+        N = boundary_idx_arr[i] - begin_idx
+        num_samples = int(N - (idx_offset + num_sample_output - 1)*idx_to_skip)
         for j in range(num_samples):
-            data_rnn_input[i*num_samples+j, :, 0:data.shape[1]] = data[i*N+j:i*N+j + idx_to_skip*num_sample_input:idx_to_skip]
-            data_rnn_output[i*num_samples+j, :, 0:data.shape[1]] = data[i*N+j + idx_to_skip*idx_offset:i*N+j + idx_to_skip*(idx_offset+num_sample_output):idx_to_skip]
-            
+#             data_rnn_input[i*num_samples+j, :, 0:data.shape[1]] = data[i*N+j:i*N+j + idx_to_skip*num_sample_input:idx_to_skip]
+#             data_rnn_output[i*num_samples+j, :, 0:data.shape[1]] = data[i*N+j + idx_to_skip*idx_offset:i*N+j + idx_to_skip*(idx_offset+num_sample_output):idx_to_skip]
+            data_rnn_input[cum_samples+j, :, 0:data.shape[1]] = data[begin_idx+j:begin_idx+j + idx_to_skip*num_sample_input:idx_to_skip]
+            data_rnn_output[cum_samples+j, :, 0:data.shape[1]] = data[begin_idx+j + idx_to_skip*idx_offset:begin_idx+j + idx_to_skip*(idx_offset+num_sample_output):idx_to_skip]
+
             if params is not None:
                 for k in range(params.shape[1]):
-                    data_rnn_input[i*num_samples+j, :, data.shape[1]+k] = params[i, k]
-                    data_rnn_output[i*num_samples+j, :, data.shape[1]+k] = params[i, k]
+                    data_rnn_input[cum_samples+j, :, data.shape[1]+k] = params[i, k]
+                    data_rnn_output[cum_samples+j, :, data.shape[1]+k] = params[i, k]
 
-            org_data_idx_arr_input[i*num_samples+j, :] = np.arange(i*N+j, i*N+j + idx_to_skip*num_sample_input, idx_to_skip)
-            org_data_idx_arr_output[i*num_samples+j, :] = np.arange(i*N+j + idx_to_skip*idx_offset, i*N+j + idx_to_skip*(idx_offset+num_sample_output), idx_to_skip)
-            
+            org_data_idx_arr_input[cum_samples+j, :] = np.arange(begin_idx+j, begin_idx+j + idx_to_skip*num_sample_input, idx_to_skip)
+            org_data_idx_arr_output[cum_samples+j, :] = np.arange(begin_idx+j + idx_to_skip*idx_offset, begin_idx+j + idx_to_skip*(idx_offset+num_sample_output), idx_to_skip)
+        cum_samples += num_samples
+        begin_idx = boundary_idx_arr[i]    
     if return_numsamples is True:
         return data_rnn_input, data_rnn_output, org_data_idx_arr_input, org_data_idx_arr_output, num_samples
     else:
