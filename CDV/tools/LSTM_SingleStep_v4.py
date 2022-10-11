@@ -159,10 +159,10 @@ class RNN_LSTM(Model):
         prediction = inputs[:, 0, :]
         for j in range(self.num_rnn_layers):
             state1 = self.hidden_states_list[j][0](prediction, training=training)
-            state1 = state1 + tf.random.uniform(shape=tf.shape(state1), minval=self.mean-0.5*self.stddev, maxval=self.mean+0.5*self.stddev)
+            # state1 = state1 + tf.random.uniform(shape=tf.shape(state1), minval=self.mean-0.5*self.stddev, maxval=self.mean+0.5*self.stddev)
             state2 = self.hidden_states_list[j][1](prediction, training=training)
-            state2 = state2 + tf.random.uniform(shape=tf.shape(state2), minval=self.mean-0.5*self.stddev, maxval=self.mean+0.5*self.stddev)
-            
+            # state2 = state2 + tf.random.uniform(shape=tf.shape(state2), minval=self.mean-0.5*self.stddev, maxval=self.mean+0.5*self.stddev)
+
             prediction, *states = self.rnn_cells_list[j](
                 prediction,
                 states=[state1, state2],
