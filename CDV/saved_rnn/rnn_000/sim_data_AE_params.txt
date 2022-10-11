@@ -1,1 +1,1 @@
-{'params_mat': array([[ 0.95   , -0.76095,  0.1    ,  1.25   ,  0.2    ,  0.5    ]]), 'init_state': [-1, -1, -1, -1, -1, -1], 't0': 0.0, 'T': 1500.0, 'delta_t': 0.01, 'return_params_arr': False, 'normalize_flag': False}
+{'params_mat': array([[ 0.95   , -0.76095,  0.1    ,  1.25   ,  0.2    ,  0.5    ]]), 'init_state': [-1, -1, -1, -1, -1, -1], 't0': 0.0, 'T': 1500.0, 'delta_t': 0.01, 'return_params_arr': False, 'dir_name_ae': '/content/drive/MyDrive/Github/MLROM/CDV/saved_ae/ae_001', 'normalize_flag': False}
