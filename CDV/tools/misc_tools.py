@@ -206,16 +206,25 @@ def create_CDV_data(
         # storing data
         idx = counter # = len(beta_arr)*len(sigma_arr)*i + len(beta_arr)*j + k
         all_data[idx*(N+1):(idx+1)*(N+1), 0:6] = X[:, :]
-        if normalize == True:
-            normalization_constant = (2*beta*(rho-1) + (rho-1)**2)**0.5
-            normalization_constant_arr[counter] = normalization_constant
-            all_data[idx*(N+1):(idx+1)*(N+1), 0:3] /= normalization_constant
+        # if normalize == True:
+        #     normalization_constant = (2*beta*(rho-1) + (rho-1)**2)**0.5
+        #     normalization_constant_arr[counter] = normalization_constant
+        #     all_data[idx*(N+1):(idx+1)*(N+1), 0:3] /= normalization_constant
         # for jj in range(idx*(N+1), (idx+1)*(N+1)):
         #     all_data[jj, :] = params
         all_data[idx*(N+1):(idx+1)*(N+1), 6:] = params[:]
 
         boundary_idx_arr[counter] = (idx+1)*(N+1)
         counter += 1
+
+    if normalize == True:
+        normalization_constant_arr = np.empty(shape=(2, 6))
+        for i in range(6):
+            sample_mean = np.mean(all_data[:, i])
+            sample_std = np.std(all_data[:, i])
+            all_data[:, i] = (all_data[:, i] - sample_mean)/sample_std
+            normalization_constant_arr[0, i] = sample_mean
+            normalization_constant_arr[1, i] = sample_std
 
     res_dict = {
         'all_data':all_data,
@@ -239,7 +248,8 @@ def create_data_for_RNN(
         boundary_idx_arr,
         delta_t,
         params=None,
-        return_numsamples=False):
+        return_numsamples=False,
+        normalize_dataset=False):
     '''
     Creates training/testing data for the RNN.
     `data` : numpy array containing all the data
@@ -308,11 +318,33 @@ def create_data_for_RNN(
             org_data_idx_arr_input[cum_samples+j, :] = np.arange(begin_idx+j, begin_idx+j + idx_to_skip*num_sample_input, idx_to_skip)
             org_data_idx_arr_output[cum_samples+j, :] = np.arange(begin_idx+j + idx_to_skip*idx_offset, begin_idx+j + idx_to_skip*(idx_offset+num_sample_output), idx_to_skip)
         cum_samples += num_samples
-        begin_idx = boundary_idx_arr[i]    
-    if return_numsamples is True:
-        return data_rnn_input, data_rnn_output, org_data_idx_arr_input, org_data_idx_arr_output, num_samples
-    else:
-        return data_rnn_input, data_rnn_output, org_data_idx_arr_input, org_data_idx_arr_output
+        begin_idx = boundary_idx_arr[i]
+
+    normalization_arr = None
+    if normalize_dataset == True:
+        normalization_arr = np.empty(shape=(2, data.shape[1]))
+        for i in range(data.shape[1]):
+            sample_mean = np.mean(data[:, i])
+            sample_std = np.std(data[:, i])
+            data_rnn_input[:, :, i] -= sample_mean
+            data_rnn_input[:, :, i] /= 1.414213*sample_std
+            normalization_arr[0, i] = sample_mean
+            normalization_arr[1, i] = 1.414213*sample_std
+
+    # if return_numsamples is True:
+    #     return data_rnn_input, data_rnn_output, org_data_idx_arr_input, org_data_idx_arr_output, num_samples
+    # else:
+    #     return data_rnn_input, data_rnn_output, org_data_idx_arr_input, org_data_idx_arr_output
+    res_dict = {
+        'data_rnn_input':data_rnn_input,
+        'data_rnn_output':data_rnn_output,
+        'org_data_idx_arr_input':org_data_idx_arr_input,
+        'org_data_idx_arr_output':org_data_idx_arr_output,
+        'num_samples':num_samples,
+        'normalization_arr':normalization_arr,
+    }
+    return res_dict
+    
 
 ################################################################################
 
