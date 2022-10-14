@@ -328,6 +328,8 @@ def create_data_for_RNN(
             sample_std = np.std(data[:, i])
             data_rnn_input[:, :, i] -= sample_mean
             data_rnn_input[:, :, i] /= 1.414213*sample_std
+            data_rnn_output[:, :, i] -= sample_mean
+            data_rnn_output[:, :, i] /= 1.414213*sample_std
             normalization_arr[0, i] = sample_mean
             normalization_arr[1, i] = 1.414213*sample_std
 
