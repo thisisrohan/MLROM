@@ -138,7 +138,10 @@ class AR_RNN_GRU(Model):
             states_list.append(states[0])
 
         # remaining number of input steps
-        for i in range(1, inputs.shape[1]):
+        warmup_steps = inputs.shape[1]
+        if warmup_steps == None:
+            warmup_steps = 1
+        for i in range(1, warmup_steps):
             prediction = inputs[:, i, :]
             for j in range(self.num_rnn_layers):
                 prediction, *states = self.rnn_cells_list[j](
