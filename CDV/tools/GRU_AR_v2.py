@@ -16,6 +16,7 @@ from tensorflow.keras.regularizers import L2
 class learnable_state(layers.Layer):
     def __init__(self, hidden_shape, b_regularizer=None, **kwargs):
         super(learnable_state, self).__init__()
+        self.hidden_shape = hidden_shape
         self.learnable_variable = self.add_weight(
             name='learnable_variable',
             shape=[1, hidden_shape],
@@ -28,73 +29,56 @@ class learnable_state(layers.Layer):
         batch_size = x.shape[0]
         if batch_size == None:
             batch_size = 1
+        # return tf.matmul(tf.ones(shape=[batch_size, 1]), self.learnable_variable)
         return tf.tile(self.learnable_variable, [batch_size, 1])
 
 
-class uniform_noise(layers.Layer):
-    def __init__(self, mean=0.0, stddev=1e-4, **kwargs):
-        super(uniform_noise, self).__init__()
-        self.stddev = stddev
-        self.mean = mean
-
-    def call(self, x):
-        x = x + tf.random.uniform(shape=tf.shape(x), minval=self.mean-0.5*self.stddev, maxval=self.mean+0.5*self.stddev)
-        return x
-
-
-class RNN_GRU(Model):
+class AR_RNN_GRU(Model):
     """
-    Single-step GRU network that advances (in time) the latent space representation,
-    and has trainable initial states for the cell and memory states.
+    Single-step GRU network that advances (in time) the latent space representation
     """
     def __init__(
             self, data_dim=None,
-            # in_steps=None,
-            # out_steps=None,
+            T_input=None,
+            T_output=None,
             dt_rnn=None,
             lambda_reg=0.0,
             reg_name='L2',
             rnn_layers_units=[3, 3, 3],
             dense_layer_act_func='linear',
-            load_file=None,
-            mean=0.0,
-            stddev=1e-5):
+            load_file=None):
         
-        super(RNN_GRU, self).__init__()
+        super(AR_RNN_GRU, self).__init__()
 
         self.load_file = load_file
-        # if self.load_file == None:
-        self.data_dim = data_dim
-        # self.out_steps = out_steps
-        self.dt_rnn = dt_rnn
-        self.lambda_reg = lambda_reg
-        self.reg_name = reg_name
-        self.rnn_layers_units = rnn_layers_units
-        self.dense_layer_act_func = dense_layer_act_func
-        self.mean = mean
-        self.stddev = stddev
-        if self.load_file is not None:
+        if self.load_file == None:
+            self.data_dim = data_dim
+            self.T_input = T_input
+            self.T_output = T_output
+            self.dt_rnn = dt_rnn
+            self.lambda_reg = lambda_reg
+            self.reg_name = reg_name
+            self.rnn_layers_units = rnn_layers_units
+            self.dense_layer_act_func = dense_layer_act_func
+        else:
             with open(load_file, 'r') as f:
                 lines = f.readlines()
             load_dict = eval(lines[0])
-            if 'data_dim' in load_dict.keys():
-                self.data_dim = load_dict['data_dim']
-            # self.out_steps = load_dict['out_steps']
-            if 'dt_rnn' in load_dict.keys():
-                self.dt_rnn = load_dict['dt_rnn']
-            if 'lambda_reg' in load_dict.keys():
-                self.lambda_reg = load_dict['lambda_reg']
-            if 'reg_name' in load_dict.keys():
-                self.reg_name = load_dict['reg_name']
-            if 'rnn_layers_units' in load_dict.keys():
-                self.rnn_layers_units = load_dict['rnn_layers_units']
-            if 'dense_layer_act_func' in load_dict.keys():
-                self.dense_layer_act_func = load_dict['dense_layer_act_func']
-            if 'mean' in load_dict.keys():
-                self.mean = load_dict['mean']
-            if 'stddev' in load_dict.keys():
-                self.stddev = load_dict['stddev']
+            self.data_dim = load_dict['data_dim']
+            # self.T_input = load_dict['T_input']
+            # self.T_output = load_dict['T_output']
+            self.T_input = T_input
+            self.T_output = T_output
+            self.dt_rnn = load_dict['dt_rnn']
+            self.lambda_reg = load_dict['lambda_reg']
+            self.reg_name = load_dict['reg_name']
+            self.rnn_layers_units = load_dict['rnn_layers_units']
+            self.dense_layer_act_func = load_dict['dense_layer_act_func']
         self.num_rnn_layers = len(self.rnn_layers_units)
+
+        ### time steps
+        self.in_steps = int((self.T_input+0.5*self.dt_rnn)//self.dt_rnn)
+        self.out_steps = int((self.T_output+0.5*self.dt_rnn)//self.dt_rnn)
 
 
         ### the GRU network
@@ -108,7 +92,9 @@ class RNN_GRU(Model):
                 ) for units in self.rnn_layers_units
             ]
             
-            self.hidden_states_list = [learnable_state(hidden_shape=units, b_regularizer=reg(self.lambda_reg)) for units in self.rnn_layers_units]
+            self.hidden_states_list = [
+    		learnable_state(hidden_shape=units, b_regularizer=reg(self.lambda_reg)) for units in self.rnn_layers_units
+            ]
 
             self.dense = layers.Dense(
                 self.data_dim,
@@ -121,7 +107,9 @@ class RNN_GRU(Model):
                 layers.GRUCell(units=units) for units in self.rnn_layers_units
             ]
             
-            self.hidden_states_list = [learnable_state(hidden_shape=units) for units in self.rnn_layers_units]
+            self.hidden_states_list = [
+                learnable_state(hidden_shape=units) for units in self.rnn_layers_units
+            ]
 
             self.dense = layers.Dense(
                 self.data_dim,
@@ -136,39 +124,51 @@ class RNN_GRU(Model):
         return
 
     @tf.function
-    def call(self, inputs, training=None):
-
-        # inputs shape : (None, time_steps, data_dim)
-        out_steps = inputs.shape[1]
-
-        predictions_list = []
-        
+    def _warmup(self, inputs, training=None):
         ### Initialize the GRU state.
         states_list = []
         # first step
         prediction = inputs[:, 0, :]
         for j in range(self.num_rnn_layers):
-            state1 = self.hidden_states_list[j](prediction, training=training)
-            
             prediction, *states = self.rnn_cells_list[j](
                 prediction,
-                states=state1,
-                training=training,
+                states=self.hidden_states_list[j](prediction, training=training),
+                training=training
             )
             states_list.append(states[0])
-        prediction = self.dense(prediction, training=training)
-        predictions_list.append(prediction)
 
-        ### Remaining number of time-steps
-        for i in range(1, out_steps):
+        # remaining number of input steps
+        for i in range(1, inputs.shape[1]):
             prediction = inputs[:, i, :]
             for j in range(self.num_rnn_layers):
-                state1 = states_list[j]
-                state1 = state1 + tf.random.uniform(shape=tf.shape(state1), minval=self.mean-0.5*self.stddev, maxval=self.mean+0.5*self.stddev)
                 prediction, *states = self.rnn_cells_list[j](
                     prediction,
-                    states=state1,
-                    training=training,
+                    states=states_list[j],
+                    training=training
+                )
+                states_list[j] = states[0]
+
+        # pass final RNN output through the dense layer to get final prediction
+        prediction = self.dense(prediction, training=training)
+
+        return prediction, states_list
+        
+
+    @tf.function
+    def call(self, inputs, training=None):
+        predictions_list = []
+        prediction, states_list = self._warmup(inputs, training)
+
+        # first prediction
+        predictions_list.append(prediction)
+
+        ### Run the rest of the prediction steps.
+        for i in range(1, self.out_steps):
+            for j in range(self.num_rnn_layers):
+                prediction, *states = self.rnn_cells_list[j](
+                    prediction,
+                    states=states_list[j],
+                    training=training
                 )
                 states_list[j] = states[0]
             prediction = self.dense(prediction, training=training)
@@ -180,7 +180,6 @@ class RNN_GRU(Model):
         predictions = tf.transpose(predictions, [1, 0, 2])
 
         return predictions
-
 
     def save_model_weights(self, file_name, H5=True):
 
@@ -204,8 +203,6 @@ class RNN_GRU(Model):
             'rnn_layers_units':list(self.rnn_layers_units),
             'dense_layer_act_func':self.dense_layer_act_func,
             'load_file':self.load_file,
-            'mean':self.mean,
-            'stddev':self.stddev
         }
         with open(file_name, 'w') as f:
             f.write(str(class_dict))
@@ -221,7 +218,7 @@ class RNN_GRU(Model):
         self.save_class_dict(file_name+'_class_dict.txt')
 
         ### saving weights
-        self.save_model_weights(file_name+'_gru_weights', H5=H5)
+        self.save_model_weights(file_name+'_lstm_weights', H5=H5)
 
         return
 
@@ -233,5 +230,12 @@ class RNN_GRU(Model):
         self.load_weights(file_name)
         return
 
+    def update_Tinput(self, new_T_input):
+        self.T_input = new_T_input
+        self.in_steps = int((self.T_input+0.5*self.dt_rnn)//self.dt_rnn)
+
+    def update_Toutput(self, new_T_output):
+        self.T_output = new_T_output
+        self.out_steps = int((self.T_output+0.5*self.dt_rnn)//self.dt_rnn)
 
 ################################################################################

@@ -174,17 +174,13 @@ def create_CDV_data(
 
     boundary_idx_arr = np.empty(
         shape=params_mat.shape[0],
-        dtype=np.int64
+        dtype=np.int32
     )
 
     if return_params_arr == True:
-        params_arr = np.empty(shape=(boundary_idx_arr.shape[0], 6))
+        params_arr = np.empty(shape=(boundary_idx_arr.shape[0], 6), dtype=np.float32)
     else:
         params_arr = None
-    if normalize == True:
-        normalization_constant_arr = np.empty(shape=(boundary_idx_arr.shape[0]))
-    else:
-        normalization_constant_arr = None
 
     counter = 0
     for ii in range(params_mat.shape[0]):
@@ -193,7 +189,7 @@ def create_CDV_data(
         if return_params_arr == True:
             params_arr[counter, :] = params[:]
 
-        X = np.empty(shape=(N+1, 6), dtype=np.float64)
+        X = np.empty(shape=(N+1, 6), dtype=np.float32)
         X[0, :] = init_state
 
         # integrating
@@ -217,8 +213,9 @@ def create_CDV_data(
         boundary_idx_arr[counter] = (idx+1)*(N+1)
         counter += 1
 
+    normalization_constant_arr = None
     if normalize == True:
-        normalization_constant_arr = np.empty(shape=(2, 6))
+        normalization_constant_arr = np.empty(shape=(2, 6), dtype=np.float32)
         for i in range(6):
             sample_mean = np.mean(all_data[:, i])
             sample_std = np.std(all_data[:, i])
@@ -293,8 +290,8 @@ def create_data_for_RNN(
         total_num_samples += int(N - (idx_offset + num_sample_output - 1)*idx_to_skip)
         begin_idx = boundary_idx_arr[i]
 
-    data_rnn_input = np.empty(shape=(total_num_samples, num_sample_input, RNN_data_dim))
-    data_rnn_output = np.empty(shape=(total_num_samples, num_sample_output, RNN_data_dim))
+    data_rnn_input = np.empty(shape=(total_num_samples, num_sample_input, RNN_data_dim), dtype=np.float32)
+    data_rnn_output = np.empty(shape=(total_num_samples, num_sample_output, RNN_data_dim), dtype=np.float32)
 
     org_data_idx_arr_input = np.empty(shape=(total_num_samples, num_sample_input), dtype=np.int32)
     org_data_idx_arr_output = np.empty(shape=(total_num_samples, num_sample_output), dtype=np.int32)
@@ -322,7 +319,7 @@ def create_data_for_RNN(
 
     normalization_arr = None
     if normalize_dataset == True:
-        normalization_arr = np.empty(shape=(2, data.shape[1]))
+        normalization_arr = np.empty(shape=(2, data.shape[1]), dtype=np.float32)
         for i in range(data.shape[1]):
             sample_mean = np.mean(data[:, i])
             sample_std = np.std(data[:, i])
