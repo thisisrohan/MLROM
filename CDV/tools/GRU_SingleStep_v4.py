@@ -140,6 +140,8 @@ class RNN_GRU(Model):
 
         # inputs shape : (None, time_steps, data_dim)
         out_steps = inputs.shape[1]
+        if out_steps == None:
+            out_steps = 1
 
         predictions_list = []
         

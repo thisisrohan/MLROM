@@ -1,0 +1,1 @@
+{'data_dim': 4, 'dt_rnn': 0.1, 'lambda_reg': 0.0001, 'reg_name': 'L2', 'rnn_layers_units': [64], 'dense_layer_act_func': 'linear', 'load_file': None, 'mean': 0.0, 'stddev': 1e-05}
