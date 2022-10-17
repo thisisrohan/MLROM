@@ -172,7 +172,7 @@ class AR_RNN_LSTM(Model):
         self.norm_layer = normalization_layer(self.normalization_arr)
 
         ### initializing weights
-        temp = tf.ones(shape=[1, 1, self.data_dim])
+        temp = tf.ones(shape=[1, self.in_steps, self.data_dim])
         temp = self.predict(temp)
 
         return
@@ -195,7 +195,7 @@ class AR_RNN_LSTM(Model):
             states_list.append(states[0])
 
         # remaining number of input steps
-        for i in range(1, inputs.shape[1]):
+        for i in range(1, self.in_steps):
             prediction = inputs[:, i, :]
             #for j in range(inputs.shape[2]):
             #    prediction[:, :, j] -= self.normalization_arr[0, j]
@@ -214,7 +214,7 @@ class AR_RNN_LSTM(Model):
         return prediction, states_list
         
 
-    #@tf.function
+    @tf.function
     def call(self, inputs, training=None):
         #norm_layer = normalization_layer(self.normalization_arr)
         predictions_list = []

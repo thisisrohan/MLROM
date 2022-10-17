@@ -124,7 +124,7 @@ class AR_RNN_LSTM(Model):
 
 
         ### initializing weights
-        temp = tf.ones(shape=[1, 1, self.data_dim])
+        temp = tf.ones(shape=[1, self.in_steps, self.data_dim])
         temp = self.predict(temp)
 
         return
@@ -147,7 +147,7 @@ class AR_RNN_LSTM(Model):
             states_list.append(states[0])
 
         # remaining number of input steps
-        for i in range(1, inputs.shape[1]):
+        for i in range(1, self.in_steps):
             prediction = inputs[:, i, :]
             for j in range(self.num_rnn_layers):
                 prediction, *states = self.rnn_cells_list[j](
