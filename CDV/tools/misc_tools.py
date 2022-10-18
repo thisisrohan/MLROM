@@ -219,9 +219,9 @@ def create_CDV_data(
         for i in range(6):
             sample_mean = np.mean(all_data[:, i])
             sample_std = np.std(all_data[:, i])
-            all_data[:, i] = (all_data[:, i] - sample_mean)/sample_std
+            all_data[:, i] = (all_data[:, i] - sample_mean)/(1.414213*sample_std)
             normalization_constant_arr[0, i] = sample_mean
-            normalization_constant_arr[1, i] = sample_std
+            normalization_constant_arr[1, i] = 1.414213*sample_std
 
     res_dict = {
         'all_data':all_data,
