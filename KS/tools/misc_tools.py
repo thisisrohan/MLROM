@@ -319,13 +319,13 @@ def create_KS_data(
             all_data[ii*(N+1):(ii+1)*(N+1), num_modes:] = params_mat[ii, :]
         for i in range(1, N+1):
     
-            Nv = -0.5j*k * fft(np.real(ifft(v))**2)
+            Nv = -params_mat[ii, 0]*0.5j*k * fft(np.real(ifft(v))**2)
             a = E_2 * v + h/2 * Q * Nv
-            Na = -0.5j*k * fft(np.real(ifft(a))**2)
+            Na = -params_mat[ii, 0]*0.5j*k * fft(np.real(ifft(a))**2)
             b = E_2 * v + h/2 * Q * Na
-            Nb = -0.5j*k * fft(np.real(ifft(b))**2)
+            Nb = -params_mat[ii, 0]*0.5j*k * fft(np.real(ifft(b))**2)
             c = E_2 * a + h/2 * Q * (2 * Nb - Nv)
-            Nc = -0.5j*k * fft(np.real(ifft(c))**2)
+            Nc = -params_mat[ii, 0]*0.5j*k * fft(np.real(ifft(c))**2)
             #update rule
             v = E * v + h*f1*Nv + h*f2*(Na+Nb) + h*f3*Nc
     
@@ -378,7 +378,7 @@ def create_data_for_RNN(
     `T_input` : time span of the input
     `T_output` : time span of the output
     `T_offset` : time difference between the input sequence and output sequence
-    `N` : total number of timesteps in one case
+    `N` : total number of timesteps in one case [obsolete, only here for backwards compatibility]
     `boundary_idx_arr` : array of indices separating the cases in `data`
                          num_cases = len(boundary_idx_arr)
     `delta_t` : delta t of the simulation from which `data` is pulled
@@ -387,9 +387,9 @@ def create_data_for_RNN(
                with their respective parameters.
     '''
 
-    ### VERY IMPORTANT ###
-    N += 1
-    ######################
+    # ### VERY IMPORTANT ###
+    # N += 1
+    # ######################
 
     num_sample_input = int((T_input+0.25*dt_rnn) // dt_rnn)
     num_sample_output = int((T_output+0.25*dt_rnn) // dt_rnn)
@@ -421,6 +421,7 @@ def create_data_for_RNN(
 
     begin_idx = 0
     cum_samples = 0
+    rnn_data_boundary_idx_arr = np.empty_like(boundary_idx_arr)
     for i in range(len(boundary_idx_arr)):
         N = boundary_idx_arr[i] - begin_idx
         num_samples = int(N - (idx_offset + num_sample_output - 1)*idx_to_skip)
@@ -438,6 +439,7 @@ def create_data_for_RNN(
             org_data_idx_arr_input[cum_samples+j, :] = np.arange(begin_idx+j, begin_idx+j + idx_to_skip*num_sample_input, idx_to_skip)
             org_data_idx_arr_output[cum_samples+j, :] = np.arange(begin_idx+j + idx_to_skip*idx_offset, begin_idx+j + idx_to_skip*(idx_offset+num_sample_output), idx_to_skip)
         cum_samples += num_samples
+        rnn_data_boundary_idx_arr[i] = cum_samples
         begin_idx = boundary_idx_arr[i]
 
     normalization_arr = None
@@ -464,6 +466,7 @@ def create_data_for_RNN(
         'org_data_idx_arr_output':org_data_idx_arr_output,
         'num_samples':num_samples,
         'normalization_arr':normalization_arr,
+        'rnn_data_boundary_idx_arr':rnn_data_boundary_idx_arr
     }
     return res_dict
     
@@ -779,13 +782,17 @@ def plot_reconstructed_data(
 
 def plot_reconstructed_data_KS(
         boundary_idx_arr,
-        dir_name_ae,
+        dir_name,
         all_data,
         reconstructed_data, delta_t, xgrid,
         xticks_snapto=20,
         num_yticks=11,
         save_figs=False,
-        normalization_constant_arr=None):
+        normalization_constant_arr=None,
+        xlabel=r'Time',
+        ylabel=r'$x$',
+        ax1_title=r'Actual Data',
+        ax2_title=r'NN Reconstructed Data'):
 
     # saving reconstructed data
     n = len(boundary_idx_arr)
@@ -795,7 +802,7 @@ def plot_reconstructed_data_KS(
     num_modes = xgrid.shape[0]
     
     if save_figs == True:
-        recon_data_dir = dir_name_ae+'/plots/reconstructed_data'
+        recon_data_dir = dir_name+'/plots/reconstructed_data'
         if not os.path.isdir(recon_data_dir):
             os.makedirs(recon_data_dir)
     
@@ -828,25 +835,25 @@ def plot_reconstructed_data_KS(
         # plotting the original data
         ax_orig = fig.add_subplot(num_rows, num_cols, subplot1)
         im_orig = ax_orig.imshow(rescaled_orig_data.transpose(), aspect='auto', origin='lower', vmin=vmin, vmax=vmax)
-        ax_orig.title.set_text(r'Actual Data')
+        ax_orig.title.set_text(ax1_title)
         xticks = np.arange(0, N, int((xticks_snapto+0.5*delta_t)//delta_t))
         ax_orig.set_xticks(ticks=xticks)
         ax_orig.set_xticklabels(np.round(xticks*delta_t, 1))
         ax_orig.tick_params(axis='x', rotation=270+45)
         yticks = np.linspace(0, 1, num_yticks)*(len(xgrid)-1)
-        yticklabels = np.round(np.linspace(0, 1, yticks.shape[0])*xgrid[-1], 2)
+        yticklabels = np.round(xgrid[0]+np.linspace(0, 1, yticks.shape[0])*(xgrid[-1]-xgrid[0]), 2)
         ax_orig.set_yticks(ticks=yticks)
         ax_orig.set_yticklabels(yticklabels)
-        ax_orig.set_xlabel('Time')
-        ax_orig.set_ylabel(r'x')
+        ax_orig.set_xlabel(xlabel)
+        ax_orig.set_ylabel(ylabel)
     
         # plotting the reconstructed data
         ax_predict = fig.add_subplot(num_rows, num_cols, subplot2, sharey=ax_orig, sharex=ax_orig)
         im_predict = ax_predict.imshow(rescaled_predicted_data.transpose(), aspect='auto', origin='lower', vmin=vmin, vmax=vmax)
-        ax_predict.title.set_text(r'NN Reconstructed Data')
+        ax_predict.title.set_text(ax2_title)
         ax_predict.tick_params(axis='x', rotation=270+45)
-        ax_predict.set_xlabel('Time')
-        ax_predict.set_ylabel(r'x')
+        ax_predict.set_xlabel(xlabel)
+        ax_predict.set_ylabel(ylabel)
 
         # subplots adjustment to account for colorbars
         fig.subplots_adjust(
@@ -874,8 +881,8 @@ def plot_reconstructed_data_KS(
         im_error = ax_error.imshow(error.transpose(), aspect='auto', origin='lower')
         ax_error.title.set_text(r'Normalized Error')
         ax_error.tick_params(axis='x', rotation=270+45)
-        ax_error.set_xlabel('Time')
-        ax_error.set_ylabel(r'x')
+        ax_error.set_xlabel(xlabel)
+        ax_error.set_ylabel(ylabel)
 
         # error colorbar
         cbe_xbegin = ax_error.transData.transform([0, 0])
