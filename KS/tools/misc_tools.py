@@ -4,6 +4,7 @@ import tensorflow as tf
 import time
 import h5py
 import os
+from scipy.fft import fft, ifft, fftfreq
 
 ############################ Lorenz System Functions ###########################
 
@@ -233,6 +234,128 @@ def create_CDV_data(
 
     return res_dict
 
+
+def create_KS_data(
+        T, t0, delta_t, xgrid,
+        init_state, params_mat=np.array([[1, 1, 1]]),
+        return_params_arr=False,
+        normalize=False, M_Cauchy=32, alldata_withparams=False):
+    '''
+    simulating the KS equation
+    u_t = -nu1*u*u_x - nu2*u_xx - nu3*u_xxxx
+    params_mat[0] = nu1
+    params_mat[1] = nu2
+    params_mat[2] = nu3
+    '''
+    
+    if len(params_mat.shape) == 1:
+        params_mat = params_mat.reshape((1, params_mat.shape[0]))
+    N = int(((T-t0) + 0.5*delta_t) // delta_t)
+    num_modes = init_state.shape[0]
+    num_params = params_mat.shape[1]
+    if alldata_withparams == True:
+        all_data = np.empty(
+            shape=(
+                params_mat.shape[0]*(N+1),
+                num_modes + num_params,
+            ),
+            dtype=np.float32
+        )
+    else:
+        all_data = np.empty(
+            shape=(
+                params_mat.shape[0]*(N+1),
+                num_modes,
+            ),
+            dtype=np.float32
+        )
+
+    boundary_idx_arr = np.empty(
+        shape=params_mat.shape[0],
+        dtype=np.int32
+    )
+
+    length = xgrid[-1]
+    M = xgrid.shape[0]
+
+    params_arr = None
+    if return_params_arr == True:
+        params_arr = params_mat.copy()
+    
+    # scalars for ETDRK4
+    h = delta_t
+    k = fftfreq(M) * M * 2*np.pi/length
+
+    for ii in range(params_mat.shape[0]):
+        L = params_mat[ii, 1]*(k**2) - params_mat[ii, 2]*(k**4)
+        E = np.exp(h*L)
+        E_2 = np.exp(h*L/2)
+        Q = 0
+        phi1 = 0.0
+        phi2 = 0.0
+        phi3 = 0.0
+    
+        for j in range(1,M_Cauchy+1):
+            arg = h*L + np.ones(L.shape[0]) * np.exp(2j*np.pi*(j-0.5)/M_Cauchy)
+    
+            phi1 += 1.0/arg * (np.exp(arg) - np.ones(L.shape[0]))
+            phi2 += 1.0/arg**2 * (np.exp(arg) - arg - np.ones(L.shape[0]))
+            phi3 += 1.0/arg**3 * (np.exp(arg) - 0.5*arg**2 - arg - np.ones(L.shape[0]))
+            Q += 2.0/arg * (np.exp(0.5*arg) - np.ones(L.shape[0]))
+    
+        phi1 = np.real(phi1/M_Cauchy)
+        phi2 = np.real(phi2/M_Cauchy)
+        phi3 = np.real(phi3/M_Cauchy)
+        Q = np.real(Q/M_Cauchy)
+    
+        f1 = phi1 - 3*phi2 + 4*phi3 #-4 - L * h + E * (4 - 3 * L * h + (L * h)*(L * h))
+        f2 = 2*phi2 - 4*phi3 #2 + L * h + E * (-2 + L * h)
+        f3 = -phi2 + 4*phi3 #-4 - 3 * L * h - (L*h)*(L*h) + E * (4 - L*h)
+    
+        # main loop
+        v = fft(init_state)
+        all_data[ii*(N+1) + 0, 0:num_modes] = init_state[:]
+        if alldata_withparams == True:
+            all_data[ii*(N+1):(ii+1)*(N+1), num_modes:] = params_mat[ii, :]
+        for i in range(1, N+1):
+    
+            Nv = -0.5j*k * fft(np.real(ifft(v))**2)
+            a = E_2 * v + h/2 * Q * Nv
+            Na = -0.5j*k * fft(np.real(ifft(a))**2)
+            b = E_2 * v + h/2 * Q * Na
+            Nb = -0.5j*k * fft(np.real(ifft(b))**2)
+            c = E_2 * a + h/2 * Q * (2 * Nb - Nv)
+            Nc = -0.5j*k * fft(np.real(ifft(c))**2)
+            #update rule
+            v = E * v + h*f1*Nv + h*f2*(Na+Nb) + h*f3*Nc
+    
+            #save data
+            all_data[ii*(N+1) + i, 0:num_modes] = np.real(ifft(v))
+            
+        boundary_idx_arr[ii] = (ii+1)*(N+1)
+    
+
+    normalization_constant_arr = None
+    if normalize == True:
+        normalization_constant_arr = np.empty(shape=(2, all_data.shape[1]), dtype=np.float32)
+        for i in range(num_modes):
+            sample_mean = np.mean(all_data[:, i])
+            sample_std = np.std(all_data[:, i])
+            all_data[:, i] = (all_data[:, i] - sample_mean)/(1.414213*sample_std)
+            normalization_constant_arr[0, i] = sample_mean
+            normalization_constant_arr[1, i] = 1.414213*sample_std
+
+    res_dict = {
+        'all_data':all_data,
+        'N':N,
+        'boundary_idx_arr':boundary_idx_arr,
+        'params_arr':params_arr,
+        'normalization_constant_arr':normalization_constant_arr
+    }
+    
+    return res_dict
+
+
 ################################################################################
 
 def create_data_for_RNN(
@@ -432,6 +555,77 @@ def plot_latent_states_cdv(
     return fig, ax
 
 
+def plot_latent_states_KS(
+        boundary_idx_arr,
+        latent_states_all,
+        delta_t,
+        dir_name_ae,
+        xticks_snapto=20,
+        num_yticks=11,
+        xlim=None,
+        ylim=None,
+        max_rows=10,
+        legend_bbox_to_anchor=[1, 1],
+        legend_loc='upper left',
+        legend_markerscale=10,
+        markersize=1,
+        cmap_name='viridis',
+        save_figs=False,
+        factor=1):
+
+    # plotting latent states
+    if save_figs == True:
+        ls_dir = dir_name_ae+'/plots/latent_states'
+        if not os.path.isdir(ls_dir):
+            os.makedirs(ls_dir)
+
+    n = len(boundary_idx_arr)
+    num_cols = 1
+    num_rows = 1
+    
+    num_digits_n = int(np.log10(n)+1)
+    num_latent_states = latent_states_all.shape[1]
+
+    prev_idx = 0
+    for i in range(len(boundary_idx_arr)):
+        next_idx = boundary_idx_arr[i]
+        fig, ax = plt.subplots(figsize=(factor*7.5*num_cols, factor*5.0*num_rows))
+        N = int(next_idx-prev_idx)
+        input_time = np.arange(0, N)*delta_t
+        im = ax.imshow(latent_states_all[prev_idx:next_idx, :].transpose(), aspect='auto', origin='lower')
+        num_xticks = 1 + int((N*delta_t + 0.5*xticks_snapto) // xticks_snapto)
+        # xticks = np.linspace(0, N, num_xticks, dtype=np.int32)
+        xticks = np.arange(0, N, int((xticks_snapto+0.5*delta_t)//delta_t))
+        ax.set_xticks(ticks=xticks)
+        ax.set_xticklabels(np.round(xticks*delta_t, 1))
+        ax.tick_params(axis='x', rotation=270+45)
+    
+        yticks = np.linspace(0, num_latent_states-1, num_yticks, dtype=np.int32)
+        yticklabels = yticks+1
+    
+        ax.set_yticks(ticks=yticks)
+        ax.set_yticklabels(yticklabels)
+    
+        ax.set_xlabel('Time')
+        ax.set_ylabel(r'Latent State Index')
+        ax.title.set_text(r'Latent States')
+    
+        plt.colorbar(im)
+        
+        prev_idx = next_idx
+        
+        # saving the figures
+        if save_figs == True:
+            fig.savefig(ls_dir+'/latent_states_'+str(i+1).zfill(num_digits_n)+'.png', dpi=300, bbox_inches='tight')
+            fig.clear()
+            plt.close()
+        else:
+            plt.show()
+            print('')
+
+    return
+
+
 def plot_latent_states(
         boundary_idx_arr,
         latent_states_all,
@@ -581,6 +775,129 @@ def plot_reconstructed_data(
         return
     else:
         return fig
+
+
+def plot_reconstructed_data_KS(
+        boundary_idx_arr,
+        dir_name_ae,
+        all_data,
+        reconstructed_data, delta_t, xgrid,
+        xticks_snapto=20,
+        num_yticks=11,
+        save_figs=False,
+        normalization_constant_arr=None):
+
+    # saving reconstructed data
+    n = len(boundary_idx_arr)
+    num_cols = 3
+    num_rows = 1
+    
+    num_modes = xgrid.shape[0]
+    
+    if save_figs == True:
+        recon_data_dir = dir_name_ae+'/plots/reconstructed_data'
+        if not os.path.isdir(recon_data_dir):
+            os.makedirs(recon_data_dir)
+    
+    num_digits_n = int(np.log10(n)+1)
+    
+    prev_idx = 0
+    for i in range(n):
+        fig = plt.figure(figsize=(7.5*(num_cols+0), 5.0*num_rows))
+        subplot1 = 1
+        subplot2 = subplot1 + 1
+    
+        next_idx = boundary_idx_arr[i]
+        N = next_idx - prev_idx
+    
+        rescaled_orig_data = all_data[prev_idx:next_idx, 0:num_modes]
+        rescaled_predicted_data = reconstructed_data[prev_idx:next_idx, 0:num_modes]
+        if normalization_constant_arr is not None:
+            rescaled_orig_data = invert_normalization(rescaled_orig_data, normalization_constant_arr)
+            rescaled_predicted_data = invert_normalization(rescaled_predicted_data, normalization_constant_arr)
+    
+        vmin = np.min([
+            rescaled_orig_data.min(),
+            rescaled_predicted_data.min()
+        ])
+        vmax = np.max([
+            rescaled_orig_data.max(),
+            rescaled_predicted_data.max()
+        ])
+
+        # plotting the original data
+        ax_orig = fig.add_subplot(num_rows, num_cols, subplot1)
+        im_orig = ax_orig.imshow(rescaled_orig_data.transpose(), aspect='auto', origin='lower', vmin=vmin, vmax=vmax)
+        ax_orig.title.set_text(r'Actual Data')
+        xticks = np.arange(0, N, int((xticks_snapto+0.5*delta_t)//delta_t))
+        ax_orig.set_xticks(ticks=xticks)
+        ax_orig.set_xticklabels(np.round(xticks*delta_t, 1))
+        ax_orig.tick_params(axis='x', rotation=270+45)
+        yticks = np.linspace(0, 1, num_yticks)*(len(xgrid)-1)
+        yticklabels = np.round(np.linspace(0, 1, yticks.shape[0])*xgrid[-1], 2)
+        ax_orig.set_yticks(ticks=yticks)
+        ax_orig.set_yticklabels(yticklabels)
+        ax_orig.set_xlabel('Time')
+        ax_orig.set_ylabel(r'x')
+    
+        # plotting the reconstructed data
+        ax_predict = fig.add_subplot(num_rows, num_cols, subplot2, sharey=ax_orig, sharex=ax_orig)
+        im_predict = ax_predict.imshow(rescaled_predicted_data.transpose(), aspect='auto', origin='lower', vmin=vmin, vmax=vmax)
+        ax_predict.title.set_text(r'NN Reconstructed Data')
+        ax_predict.tick_params(axis='x', rotation=270+45)
+        ax_predict.set_xlabel('Time')
+        ax_predict.set_ylabel(r'x')
+
+        # subplots adjustment to account for colorbars
+        fig.subplots_adjust(
+            bottom=0.2,
+            left=0.1,
+        )
+
+        # original data and recon data colorbar
+        cb_xbegin = ax_orig.transData.transform([0, 0])
+        cb_xbegin = fig.transFigure.inverted().transform(cb_xbegin)[0]
+        cb_xend = ax_predict.transData.transform([N, 0])
+        cb_xend = fig.transFigure.inverted().transform(cb_xend)[0]
+
+        cb_ax = fig.add_axes([cb_xbegin, 0.0, cb_xend-cb_xbegin, 0.025])
+        cbar = fig.colorbar(im_predict, cax=cb_ax, orientation='horizontal')
+    
+        # computing the normalized error
+        subplot3 = subplot2+1
+        error = np.abs(rescaled_orig_data-rescaled_predicted_data)
+        error_normalizer = rescaled_orig_data**2
+        error_normalizer = np.mean(np.mean(0.5*(error_normalizer[0:-1, :]+error_normalizer[1:, :]), axis=0)**0.5)
+        error = error / error_normalizer
+        # plotting the normalized error
+        ax_error = fig.add_subplot(num_rows, num_cols, subplot3, sharey=ax_orig, sharex=ax_orig)
+        im_error = ax_error.imshow(error.transpose(), aspect='auto', origin='lower')
+        ax_error.title.set_text(r'Normalized Error')
+        ax_error.tick_params(axis='x', rotation=270+45)
+        ax_error.set_xlabel('Time')
+        ax_error.set_ylabel(r'x')
+
+        # error colorbar
+        cbe_xbegin = ax_error.transData.transform([0, 0])
+        cbe_xbegin = fig.transFigure.inverted().transform(cbe_xbegin)[0]
+        cbe_xend = ax_error.transData.transform([N, 0])
+        cbe_xend = fig.transFigure.inverted().transform(cbe_xend)[0]
+        error_cb_ax = fig.add_axes([cbe_xbegin, 0.0, cbe_xend-cbe_xbegin, 0.025])
+        cbar_error = fig.colorbar(im_error, cax=error_cb_ax, orientation='horizontal')
+    
+        prev_idx = next_idx
+        
+        # saving the figures
+        if save_figs == True:
+            fig.savefig(recon_data_dir+'/reconstructed_'+str(i+1).zfill(num_digits_n)+'.png', dpi=300, bbox_inches='tight')
+            fig.clear()
+            plt.close()
+        else:
+            plt.show()
+            print('')
+        
+    return
+        
         
 
 def plot_reconstructed_data_cdv(
@@ -708,6 +1025,44 @@ def readAndReturnLossHistories(
         return val_loss_hist, train_loss_hist, lr_change, starting_lr_idx, num_epochs_left, val_loss_arr_fromckpt, train_loss_arr_fromckpt, earlystopping_wait
     else:
         return val_loss_hist, train_loss_hist, lr_change, starting_lr_idx, num_epochs_left, val_loss_arr_fromckpt, train_loss_arr_fromckpt
+
+
+def rescale_data(data, normalization_arr):
+    '''
+    data - [num_batches x num_timesteps x num_states]
+    normalization_arr = [2 x num_states]
+    '''
+    new_data = data.copy()
+    shape = new_data.shape
+    for i in range(data.shape[-1]):
+        new_data[:, i] -= normalization_arr[0, i]
+        new_data[:, i] /= normalization_arr[1, i]
+
+    return new_data
+
+
+def norm_sq_time_average(data):
+    data_norm_sq = np.zeros(shape=data.shape[0])
+    for i in range(data.shape[1]):
+        data_norm_sq[:] += data[:, i]**2
+    # integrating using the trapezoidal rule
+    norm_sq_time_avg = np.sum(data_norm_sq) - 0.5*(data_norm_sq[0]+data_norm_sq[-1])
+    norm_sq_time_avg /= data_norm_sq.shape[0]
+    return norm_sq_time_avg
+
+
+def invert_normalization(data, normalization_arr):
+    new_data = data.copy()
+    shape = new_data.shape
+    for i in range(shape[-1]):
+        if len(shape) == 2:
+            new_data[:, i] *= normalization_arr[1, i]
+            new_data[:, i] += normalization_arr[0, i]
+        elif len(shape) == 3:
+            new_data[:, :, i] *= normalization_arr[1, i]
+            new_data[:, :, i] += normalization_arr[0, i]
+    return new_data
+
 
 ################################################################################
 
