@@ -162,7 +162,8 @@ def create_CDV_data(
         T, t0, delta_t,
         params_mat,
         init_state, return_params_arr=False,
-        normalize=False):
+        normalize=False,
+        stddev_multiplier_for_norm=None):
 
     N = int(((T-t0) + 0.5*delta_t) // delta_t)
     all_data = np.empty(
@@ -217,12 +218,14 @@ def create_CDV_data(
     normalization_constant_arr = None
     if normalize == True:
         normalization_constant_arr = np.empty(shape=(2, 6), dtype=np.float32)
+        if stddev_multiplier_for_norm is None:
+            stddev_multiplier_for_norm = 1.414213
         for i in range(6):
             sample_mean = np.mean(all_data[:, i])
             sample_std = np.std(all_data[:, i])
-            all_data[:, i] = (all_data[:, i] - sample_mean)/(1.414213*sample_std)
+            all_data[:, i] = (all_data[:, i] - sample_mean)/(stddev_multiplier_for_norm*sample_std)
             normalization_constant_arr[0, i] = sample_mean
-            normalization_constant_arr[1, i] = 1.414213*sample_std
+            normalization_constant_arr[1, i] = stddev_multiplier_for_norm*sample_std
 
     res_dict = {
         'all_data':all_data,
@@ -239,7 +242,8 @@ def create_KS_data(
         T, t0, delta_t, xgrid,
         init_state, params_mat=np.array([[1, 1, 1]]),
         return_params_arr=False,
-        normalize=False, M_Cauchy=32, alldata_withparams=False):
+        normalize=False, M_Cauchy=32, alldata_withparams=False,
+        stddev_multiplier_for_norm=None):
     '''
     simulating the KS equation
     u_t = -nu1*u*u_x - nu2*u_xx - nu3*u_xxxx
@@ -338,12 +342,14 @@ def create_KS_data(
     normalization_constant_arr = None
     if normalize == True:
         normalization_constant_arr = np.empty(shape=(2, all_data.shape[1]), dtype=np.float32)
+        if stddev_multiplier_for_norm is None:
+            stddev_multiplier_for_norm = 1.414213
         for i in range(num_modes):
             sample_mean = np.mean(all_data[:, i])
             sample_std = np.std(all_data[:, i])
-            all_data[:, i] = (all_data[:, i] - sample_mean)/(1.414213*sample_std)
+            all_data[:, i] = (all_data[:, i] - sample_mean)/(stddev_multiplier_for_norm*sample_std)
             normalization_constant_arr[0, i] = sample_mean
-            normalization_constant_arr[1, i] = 1.414213*sample_std
+            normalization_constant_arr[1, i] = stddev_multiplier_for_norm*sample_std
 
     res_dict = {
         'all_data':all_data,
