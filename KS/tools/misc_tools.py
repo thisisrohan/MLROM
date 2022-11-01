@@ -6,6 +6,9 @@ import h5py
 import os
 from scipy.fft import fft, ifft, fftfreq
 
+FTYPE = np.float32
+ITYPE = np.int32
+
 ############################ Lorenz System Functions ###########################
 
 def RK4_integrator(fX, X0, delta_t, **kwargs):
@@ -85,7 +88,7 @@ def create_Lorenz_data(
         T, t0, delta_t,
         rho_arr, sigma_arr, beta_arr,
         x0, y0, z0, return_params_arr=False,
-        normalize=False):
+        normalize=False, FTYPE=FTYPE, ITYPE=ITYPE):
 
     N = int(((T-t0) + 0.5*delta_t) // delta_t)
     all_data = np.empty(
@@ -93,12 +96,12 @@ def create_Lorenz_data(
             len(rho_arr)*len(sigma_arr)*len(beta_arr)*(N+1),
             6
         ),
-        dtype=np.float32
+        dtype=FTYPE
     )
 
     boundary_idx_arr = np.empty(
         shape=len(rho_arr)*len(sigma_arr)*len(beta_arr),
-        dtype=np.int64
+        dtype=ITYPE
     )
 
     if return_params_arr == True:
@@ -123,7 +126,7 @@ def create_Lorenz_data(
                 if return_params_arr == True:
                     params_arr[counter, :] = params[:]
 
-                X = np.empty(shape=(N+1, 3), dtype=np.float64)
+                X = np.empty(shape=(N+1, 3), dtype=FTYPE)
                 X[0, :] = [x0, y0, z0]
 
                 # integrating
@@ -163,24 +166,26 @@ def create_CDV_data(
         params_mat,
         init_state, return_params_arr=False,
         normalize=False,
-        stddev_multiplier_for_norm=None):
+        stddev_multiplier_for_norm=None, FTYPE=FTYPE, ITYPE=ITYPE):
 
+    if len(params_mat.shape) == 1:
+        params_mat = params_mat.reshape((1, params_mat.shape[0]))
     N = int(((T-t0) + 0.5*delta_t) // delta_t)
     all_data = np.empty(
         shape=(
             params_mat.shape[0]*(N+1),
             6+6
         ),
-        dtype=np.float32
+        dtype=FTYPE
     )
 
     boundary_idx_arr = np.empty(
         shape=params_mat.shape[0],
-        dtype=np.int32
+        dtype=ITYPE
     )
 
     if return_params_arr == True:
-        params_arr = np.empty(shape=(boundary_idx_arr.shape[0], 6), dtype=np.float32)
+        params_arr = np.empty(shape=(boundary_idx_arr.shape[0], 6), dtype=FTYPE)
     else:
         params_arr = None
 
@@ -191,7 +196,7 @@ def create_CDV_data(
         if return_params_arr == True:
             params_arr[counter, :] = params[:]
 
-        X = np.empty(shape=(N+1, 6), dtype=np.float32)
+        X = np.empty(shape=(N+1, 6), dtype=FTYPE)
         X[0, :] = init_state
 
         # integrating
@@ -217,7 +222,7 @@ def create_CDV_data(
 
     normalization_constant_arr = None
     if normalize == True:
-        normalization_constant_arr = np.empty(shape=(2, 6), dtype=np.float32)
+        normalization_constant_arr = np.empty(shape=(2, 6), dtype=FTYPE)
         if stddev_multiplier_for_norm is None:
             stddev_multiplier_for_norm = 1.414213
         for i in range(6):
@@ -243,7 +248,7 @@ def create_KS_data(
         init_state, params_mat=np.array([[1, 1, 1]]),
         return_params_arr=False,
         normalize=False, M_Cauchy=32, alldata_withparams=False,
-        stddev_multiplier_for_norm=None):
+        stddev_multiplier_for_norm=None, FTYPE=FTYPE, ITYPE=ITYPE):
     '''
     simulating the KS equation
     u_t = -nu1*u*u_x - nu2*u_xx - nu3*u_xxxx
@@ -263,7 +268,7 @@ def create_KS_data(
                 params_mat.shape[0]*(N+1),
                 num_modes + num_params,
             ),
-            dtype=np.float32
+            dtype=FTYPE
         )
     else:
         all_data = np.empty(
@@ -271,12 +276,12 @@ def create_KS_data(
                 params_mat.shape[0]*(N+1),
                 num_modes,
             ),
-            dtype=np.float32
+            dtype=FTYPE
         )
 
     boundary_idx_arr = np.empty(
         shape=params_mat.shape[0],
-        dtype=np.int32
+        dtype=ITYPE
     )
 
     length = xgrid[-1]
@@ -341,7 +346,7 @@ def create_KS_data(
 
     normalization_constant_arr = None
     if normalize == True:
-        normalization_constant_arr = np.empty(shape=(2, all_data.shape[1]), dtype=np.float32)
+        normalization_constant_arr = np.empty(shape=(2, all_data.shape[1]), dtype=FTYPE)
         if stddev_multiplier_for_norm is None:
             stddev_multiplier_for_norm = 1.414213
         for i in range(num_modes):
@@ -375,7 +380,8 @@ def create_data_for_RNN(
         delta_t,
         params=None,
         return_numsamples=False,
-        normalize_dataset=False):
+        normalize_dataset=False,
+        FTYPE=FTYPE, ITYPE=ITYPE):
     '''
     Creates training/testing data for the RNN.
     `data` : numpy array containing all the data
@@ -419,11 +425,11 @@ def create_data_for_RNN(
         total_num_samples += int(N - (idx_offset + num_sample_output - 1)*idx_to_skip)
         begin_idx = boundary_idx_arr[i]
 
-    data_rnn_input = np.empty(shape=(total_num_samples, num_sample_input, RNN_data_dim), dtype=np.float32)
-    data_rnn_output = np.empty(shape=(total_num_samples, num_sample_output, RNN_data_dim), dtype=np.float32)
+    data_rnn_input = np.empty(shape=(total_num_samples, num_sample_input, RNN_data_dim), dtype=FTYPE)
+    data_rnn_output = np.empty(shape=(total_num_samples, num_sample_output, RNN_data_dim), dtype=FTYPE)
 
-    org_data_idx_arr_input = np.empty(shape=(total_num_samples, num_sample_input), dtype=np.int32)
-    org_data_idx_arr_output = np.empty(shape=(total_num_samples, num_sample_output), dtype=np.int32)
+    org_data_idx_arr_input = np.empty(shape=(total_num_samples, num_sample_input), dtype=ITYPE)
+    org_data_idx_arr_output = np.empty(shape=(total_num_samples, num_sample_output), dtype=ITYPE)
 
     begin_idx = 0
     cum_samples = 0
@@ -450,7 +456,7 @@ def create_data_for_RNN(
 
     normalization_arr = None
     if normalize_dataset == True:
-        normalization_arr = np.empty(shape=(2, data.shape[1]), dtype=np.float32)
+        normalization_arr = np.empty(shape=(2, data.shape[1]), dtype=FTYPE)
         for i in range(data.shape[1]):
             sample_mean = np.mean(data[:, i])
             sample_std = np.std(data[:, i])
@@ -603,13 +609,13 @@ def plot_latent_states_KS(
         input_time = np.arange(0, N)*delta_t
         im = ax.imshow(latent_states_all[prev_idx:next_idx, :].transpose(), aspect='auto', origin='lower')
         num_xticks = 1 + int((N*delta_t + 0.5*xticks_snapto) // xticks_snapto)
-        # xticks = np.linspace(0, N, num_xticks, dtype=np.int32)
+        # xticks = np.linspace(0, N, num_xticks, dtype=ITYPE)
         xticks = np.arange(0, N, int((xticks_snapto+0.5*delta_t)//delta_t))
         ax.set_xticks(ticks=xticks)
         ax.set_xticklabels(np.round(xticks*delta_t, 1))
         ax.tick_params(axis='x', rotation=270+45)
     
-        yticks = np.linspace(0, num_latent_states-1, num_yticks, dtype=np.int32)
+        yticks = np.linspace(0, num_latent_states-1, num_yticks, dtype=ITYPE)
         yticklabels = yticks+1
     
         ax.set_yticks(ticks=yticks)
