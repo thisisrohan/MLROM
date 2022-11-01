@@ -381,6 +381,7 @@ def create_data_for_RNN(
         params=None,
         return_numsamples=False,
         normalize_dataset=False,
+        stddev_multiplier=None,
         FTYPE=FTYPE, ITYPE=ITYPE):
     '''
     Creates training/testing data for the RNN.
@@ -422,7 +423,7 @@ def create_data_for_RNN(
     total_num_samples = 0
     for i in range(len(boundary_idx_arr)):
         N = boundary_idx_arr[i] - begin_idx
-        total_num_samples += int(N - (idx_offset + num_sample_output - 1)*idx_to_skip)
+        total_num_samples += int(N - (idx_offset + num_sample_output - 0)*idx_to_skip)
         begin_idx = boundary_idx_arr[i]
 
     data_rnn_input = np.empty(shape=(total_num_samples, num_sample_input, RNN_data_dim), dtype=FTYPE)
@@ -436,7 +437,7 @@ def create_data_for_RNN(
     rnn_data_boundary_idx_arr = np.empty_like(boundary_idx_arr)
     for i in range(len(boundary_idx_arr)):
         N = boundary_idx_arr[i] - begin_idx
-        num_samples = int(N - (idx_offset + num_sample_output - 1)*idx_to_skip)
+        num_samples = int(N - (idx_offset + num_sample_output - 0)*idx_to_skip)
         for j in range(num_samples):
 #             data_rnn_input[i*num_samples+j, :, 0:data.shape[1]] = data[i*N+j:i*N+j + idx_to_skip*num_sample_input:idx_to_skip]
 #             data_rnn_output[i*num_samples+j, :, 0:data.shape[1]] = data[i*N+j + idx_to_skip*idx_offset:i*N+j + idx_to_skip*(idx_offset+num_sample_output):idx_to_skip]
@@ -456,16 +457,18 @@ def create_data_for_RNN(
 
     normalization_arr = None
     if normalize_dataset == True:
+        if stddev_multiplier is None:
+            stddev_multiplier = 1.414213
         normalization_arr = np.empty(shape=(2, data.shape[1]), dtype=FTYPE)
         for i in range(data.shape[1]):
             sample_mean = np.mean(data[:, i])
             sample_std = np.std(data[:, i])
             data_rnn_input[:, :, i] -= sample_mean
-            data_rnn_input[:, :, i] /= 1.414213*sample_std
+            data_rnn_input[:, :, i] /= stddev_multiplier*sample_std
             data_rnn_output[:, :, i] -= sample_mean
-            data_rnn_output[:, :, i] /= 1.414213*sample_std
+            data_rnn_output[:, :, i] /= stddev_multiplier*sample_std
             normalization_arr[0, i] = sample_mean
-            normalization_arr[1, i] = 1.414213*sample_std
+            normalization_arr[1, i] = stddev_multiplier*sample_std
 
     # if return_numsamples is True:
     #     return data_rnn_input, data_rnn_output, org_data_idx_arr_input, org_data_idx_arr_output, num_samples
