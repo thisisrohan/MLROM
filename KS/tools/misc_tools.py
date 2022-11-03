@@ -5,6 +5,7 @@ import time
 import h5py
 import os
 from scipy.fft import fft, ifft, fftfreq
+import scipy.linalg as splnalg
 
 FTYPE = np.float32
 ITYPE = np.int32
@@ -1189,4 +1190,126 @@ class sigmoidWarmupAndDecayLRSchedule(tf.keras.callbacks.Callback):
 
     def update_offset(self, offset):
         self.offset = offset
+
+################################################################################
+
+# LYAPUNOV SPECTRUM COMPUTATION
+
+def compute_lyapunov_spectrum(
+        create_data_fn, cdf_kwargs, num_modes, 
+        init_state_mat, params_mat, dy_mat,
+        zeta=10, delta_completionratio=0.1, num_exp=None,
+        print_flag=True, FTYPE=np.float64, ITYPE=np.int64):
+    '''
+    Computing the Lyapunov spectrum
+    '''
+    starting_time = time.time()
+
+    # init_state_mat = np.array(init_state_mat, dtype=FTYPE)
+    # params_mat = np.array(params_mat, dtype=FTYPE)
+    # dy_mat = np.array(dy_mat, dtype=FTYPE)
+    
+    if len(params_mat.shape) == 1:
+        params_mat = params_mat.reshape((1, params_mat.shape[0]))
+    if num_exp is None:
+        num_exp = num_modes
+    elif num_exp > num_modes:
+        if print_flag == True:
+            print('num_exp > num_modes, being set to num_modes.')
+        num_exp = num_modes
+
+    T = cdf_kwargs['T']
+    t0 = cdf_kwargs['t0']
+    delta_t = cdf_kwargs['delta_t']
+
+    N = int(((T-t0) + 0.5*delta_t) // delta_t)
+
+    num_params = params_mat.shape[1]
+    num_cases = params_mat.shape[0]
+
+    xi = int((N+1)//zeta)
+    if print_flag == True:
+        print('number of evaluation intervals per case: {}\n'.format(xi))
+    Rjj_mat = np.ones(shape=(num_cases, xi, num_exp), dtype=FTYPE)
+
+    lyap_coeffs = np.empty(shape=(num_cases, num_exp), dtype=FTYPE)
+
+    for ii in range(num_cases):
+        init_state_unptb = init_state_mat[ii].copy()
+        params = params_mat[ii].copy()
+        # dY = np.eye(M)*dy
+        dY = np.random.rand(num_modes, num_modes) - 0.5
+        for j in range(dY.shape[1]):
+            dY[:, j] /= np.linalg.norm(dY[:, j])
+        dY, _ = splnalg.qr(dY)
+        dY *= dy_mat[ii]
+
+        # main loop
+
+        # initializing the perturbed states        
+        init_state_ptb_mat = np.empty(shape=(num_modes, num_modes))
+        for j in range(num_modes):
+            init_state_ptb_mat[:, j] = init_state_unptb + dY[:, j]
+        
+        ptb_state_mat = np.empty(shape=(num_modes, num_modes))
+
+        completion_ratio = delta_completionratio
+        t0_star = t0
+        unptb_dict = cdf_kwargs.copy()
+        unptb_dict['params_mat'] = params
+        for i in range(xi):
+            # for j in range(zeta):
+            T_star = t0_star + zeta*delta_t
+            
+            # evolving the unperturbed state
+            unptb_dict['t0'] = t0_star
+            unptb_dict['T'] = T_star
+            res_dict_unptb = create_data_fn(init_state=init_state_unptb, **unptb_dict)
+            all_data_unptb = res_dict_unptb['all_data']
+
+            # evolving the perturbed states
+            ptb_dict_j = unptb_dict.copy()
+            for j in range(num_modes):
+                init_state_ptb_j = init_state_ptb_mat[:, j].copy()
+                res_dict_ptb_j = create_data_fn(init_state=init_state_ptb_j, **ptb_dict_j)
+                all_data_ptb_j = res_dict_ptb_j['all_data']
+                ptb_state_mat[:, j] = all_data_ptb_j[-1, :]
+                dY[:, j] = ptb_state_mat[:, j] - all_data_unptb[-1, :]
+
+            # computing the lyapunov spectrum
+            Q_qrdecomp, R_qrdecomp = splnalg.qr( dY/dy_mat[ii] )
+            for j in range(num_modes):
+                fac = 1
+                temp = R_qrdecomp[j, j]
+                if temp < 0:
+                    fac = -1
+                if j < num_exp:
+                    Rjj_mat[ii, i, j] = fac*temp
+                dY[:, j] = dy_mat[ii]*fac*Q_qrdecomp[:, j]
+
+            # updating variables
+            t0_star += zeta*delta_t
+            init_state_unptb[:] = all_data_unptb[-1, :]
+            for j in range(num_modes):
+                init_state_ptb_mat[:, j] = init_state_unptb + dY[:, j]
+
+            if i == int(completion_ratio * xi):
+                if print_flag == True:
+                    print(
+                        'case {} completion_ratio : {}, elapsed_time : {}s, global_completion : {}%'.format(
+                            ii+1,
+                            np.round(completion_ratio, 3),
+                            np.round(time.time()-starting_time, 3),
+                            np.round(100*(completion_ratio+ii)/num_cases, 3)
+                        )
+                    )
+                completion_ratio += delta_completionratio
+
+        for j in range(num_exp):
+            lyap_coeffs[ii, j] = np.sum(np.log(Rjj_mat[ii, :, j])) / (zeta*xi*delta_t)
+        if print_flag == True:
+            print('case {} MLE : {}\n'.format(ii+1, np.round(lyap_coeffs[ii, :].max(), 6)))
+
+    return lyap_coeffs, Rjj_mat
+ 
 ################################################################################
