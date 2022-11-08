@@ -165,7 +165,7 @@ def create_Lorenz_data(
 def create_CDV_data(
         T, t0, delta_t,
         params_mat,
-        init_state, return_params_arr=False,
+        init_state_mat, return_params_arr=False,
         normalize=False,
         stddev_multiplier_for_norm=None, FTYPE=FTYPE, ITYPE=ITYPE):
 
@@ -246,7 +246,7 @@ def create_CDV_data(
 
 def create_KS_data(
         T, t0, delta_t, xgrid,
-        init_state, params_mat=np.array([[1, 1, 1]]),
+        init_state_mat, params_mat=np.array([[1, 1, 1]]),
         return_params_arr=False,
         normalize=False, M_Cauchy=32, alldata_withparams=False,
         stddev_multiplier_for_norm=None, FTYPE=FTYPE, ITYPE=ITYPE):
@@ -260,8 +260,14 @@ def create_KS_data(
     
     if len(params_mat.shape) == 1:
         params_mat = params_mat.reshape((1, params_mat.shape[0]))
+        if len(init_state_mat.shape) == 1:
+            init_state_mat = init_state_mat.reshape((1, init_state_mat.shape[0]))
+    else:
+        if len(init_state_mat.shape) == 1:
+            init_state_mat = np.tile(init_state_mat, (params_mat.shape[0], 1))
+
     N = int(((T-t0) + 0.5*delta_t) // delta_t)
-    num_modes = init_state.shape[0]
+    num_modes = init_state_mat.shape[1]
     num_params = params_mat.shape[1]
     if alldata_withparams == True:
         all_data = np.empty(
@@ -323,6 +329,7 @@ def create_KS_data(
         f3 = -phi2 + 4*phi3 #-4 - 3 * L * h - (L*h)*(L*h) + E * (4 - L*h)
     
         # main loop
+        init_state = init_state_mat[ii, :]
         v = fft(init_state)
         all_data[ii*(N+1) + 0, 0:num_modes] = init_state[:]
         if alldata_withparams == True:
@@ -1235,7 +1242,7 @@ def compute_lyapunov_spectrum(
     lyap_coeffs = np.empty(shape=(num_cases, num_exp), dtype=FTYPE)
 
     for ii in range(num_cases):
-        init_state_unptb = init_state_mat[ii].copy()
+        init_state_unptb = init_state_mat[ii, :].copy()
         params = params_mat[ii].copy()
         # dY = np.eye(M)*dy
         dY = np.random.rand(num_modes, num_modes) - 0.5
@@ -1264,14 +1271,14 @@ def compute_lyapunov_spectrum(
             # evolving the unperturbed state
             unptb_dict['t0'] = t0_star
             unptb_dict['T'] = T_star
-            res_dict_unptb = create_data_fn(init_state=init_state_unptb, **unptb_dict)
+            res_dict_unptb = create_data_fn(init_state_mat=init_state_unptb, **unptb_dict)
             all_data_unptb = res_dict_unptb['all_data']
 
             # evolving the perturbed states
             ptb_dict_j = unptb_dict.copy()
             for j in range(num_modes):
                 init_state_ptb_j = init_state_ptb_mat[:, j].copy()
-                res_dict_ptb_j = create_data_fn(init_state=init_state_ptb_j, **ptb_dict_j)
+                res_dict_ptb_j = create_data_fn(init_state_mat=init_state_ptb_j, **ptb_dict_j)
                 all_data_ptb_j = res_dict_ptb_j['all_data']
                 ptb_state_mat[:, j] = all_data_ptb_j[-1, :]
                 dY[:, j] = ptb_state_mat[:, j] - all_data_unptb[-1, :]

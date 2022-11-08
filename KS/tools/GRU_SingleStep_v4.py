@@ -1,3 +1,7 @@
+################################################################################
+# Regular GRU with uniform noise added to the hidden states at each prediction.#
+################################################################################
+
 import os
 import numpy as np
 from scipy import linalg
@@ -38,7 +42,7 @@ class uniform_noise(layers.Layer):
         self.mean = mean
 
     def call(self, x):
-        x = x + tf.random.uniform(shape=tf.shape(x), minval=self.mean-0.5*self.stddev, maxval=self.mean+0.5*self.stddev)
+        x = x + tf.random.uniform(shape=tf.shape(x), minval=self.mean-1.732051*self.stddev, maxval=self.mean+1.732051*self.stddev)
         return x
 
 
@@ -164,7 +168,7 @@ class RNN_GRU(Model):
             prediction = inputs[:, i, :]
             for j in range(self.num_rnn_layers):
                 state1 = states_list[j]
-                state1 = state1 + tf.random.uniform(shape=tf.shape(state1), minval=self.mean-0.5*self.stddev, maxval=self.mean+0.5*self.stddev)
+                state1 = state1 + tf.random.uniform(shape=tf.shape(state1), minval=self.mean-1.732051*self.stddev, maxval=self.mean+1.732051*self.stddev)
                 prediction, *states = self.rnn_cells_list[j](
                     prediction,
                     states=state1,
