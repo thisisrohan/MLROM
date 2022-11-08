@@ -78,11 +78,17 @@ class AR_RNN_GRU(Model):
             self.reg_name = load_dict['reg_name']
             self.rnn_layers_units = load_dict['rnn_layers_units']
             self.dense_layer_act_func = load_dict['dense_layer_act_func']
+            if 'out_steps' in load_dict.keys():
+                self.out_steps = int(load_dict['out_steps'])
+            if 'in_steps' in load_dict.keys():
+                self.in_steps = int(load_dict['in_steps'])
         self.num_rnn_layers = len(self.rnn_layers_units)
 
         ### time steps
-        self.in_steps = int((self.T_input+0.5*self.dt_rnn)//self.dt_rnn)
-        self.out_steps = int((self.T_output+0.5*self.dt_rnn)//self.dt_rnn)
+        if T_input is not None:
+            self.in_steps = int((self.T_input+0.5*self.dt_rnn)//self.dt_rnn)
+        if T_output is not None:
+            self.out_steps = int((self.T_output+0.5*self.dt_rnn)//self.dt_rnn)
 
 
         ### the GRU network
@@ -164,7 +170,7 @@ class AR_RNN_GRU(Model):
     @tf.function
     def call(self, inputs, training=None):
         predictions_list = []
-        prediction, states_list = self._warmup(inputs, training)
+        prediction, states_list = self._warmup(inputs, training=None)
 
         # first prediction
         predictions_list.append(prediction)
@@ -210,6 +216,8 @@ class AR_RNN_GRU(Model):
             'rnn_layers_units':list(self.rnn_layers_units),
             'dense_layer_act_func':self.dense_layer_act_func,
             'load_file':self.load_file,
+            'in_steps':self.in_steps,
+            'out_steps':self.out_steps,
         }
         with open(file_name, 'w') as f:
             f.write(str(class_dict))
@@ -225,7 +233,7 @@ class AR_RNN_GRU(Model):
         self.save_class_dict(file_name+'_class_dict.txt')
 
         ### saving weights
-        self.save_model_weights(file_name+'_lstm_weights', H5=H5)
+        self.save_model_weights(file_name+'_gru_weights', H5=H5)
 
         return
 
