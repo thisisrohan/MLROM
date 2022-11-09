@@ -10,4 +10,4 @@
         -1.61019169, -0.92857795, -0.29160873,  0.30428364,  0.94725775,
          1.67947514,  2.36664313,  2.63013199,  2.01801761,  0.49446455,
         -1.249552  , -2.31584311, -2.39629443, -1.8123458 , -1.00586986,
-        -0.21128524,  0.54709476,  1.31767162,  2.06540566]]), 't0': 0.0, 'T': 800.8845993006822, 'delta_t': 0.1, 'return_params_arr': False, 'dir_name_ae': '/home/rkaushik/Documents/Thesis/MLROM/KS/saved_ae/ae_009', 'normalize_dataset': True}
+        -0.21128524,  0.54709476,  1.31767162,  2.06540566]]), 't0': 0.0, 'T': 800.8845993006822, 'delta_t': 0.1, 'return_params_arr': False, 'dir_name_ae': '/home/rkaushik/Documents/Thesis/MLROM/KS/saved_ae/ae_009', 'normalize_dataset': True, 'stddev_multiplier': 3}
