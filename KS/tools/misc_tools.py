@@ -389,6 +389,7 @@ def create_data_for_RNN(
         params=None,
         return_numsamples=False,
         normalize_dataset=False,
+        normalization_arr_external=None,
         stddev_multiplier=None,
         FTYPE=FTYPE, ITYPE=ITYPE):
     '''
@@ -465,18 +466,23 @@ def create_data_for_RNN(
 
     normalization_arr = None
     if normalize_dataset == True:
-        if stddev_multiplier is None:
-            stddev_multiplier = 1.414213
-        normalization_arr = np.empty(shape=(2, data.shape[1]), dtype=FTYPE)
+        if normalization_arr_external is None:
+            if stddev_multiplier is None:
+                stddev_multiplier = 1.414213
+            normalization_arr = np.empty(shape=(2, data.shape[1]), dtype=FTYPE)
+            for i in range(data.shape[1]):
+                sample_mean = np.mean(data[:, i])
+                sample_std = np.std(data[:, i])
+                normalization_arr[0, i] = sample_mean
+                normalization_arr[1, i] = stddev_multiplier*sample_std
+        else:
+            normalization_arr = normalization_arr_external.copy()
         for i in range(data.shape[1]):
-            sample_mean = np.mean(data[:, i])
-            sample_std = np.std(data[:, i])
-            data_rnn_input[:, :, i] -= sample_mean
-            data_rnn_input[:, :, i] /= stddev_multiplier*sample_std
-            data_rnn_output[:, :, i] -= sample_mean
-            data_rnn_output[:, :, i] /= stddev_multiplier*sample_std
-            normalization_arr[0, i] = sample_mean
-            normalization_arr[1, i] = stddev_multiplier*sample_std
+            data_rnn_input[:, :, i] -= normalization_arr[0, i]
+            data_rnn_input[:, :, i] /= normalization_arr[1, i]
+            data_rnn_output[:, :, i] -= normalization_arr[0, i]
+            data_rnn_output[:, :, i] /= normalization_arr[1, i]
+            
 
     # if return_numsamples is True:
     #     return data_rnn_input, data_rnn_output, org_data_idx_arr_input, org_data_idx_arr_output, num_samples
