@@ -1,0 +1,1 @@
+{'dt_rnn': 0.1, 'T_sample_input': 5.010000000000001, 'T_sample_output': 38.13736152648926, 'T_offset': 5.010000000000001, 'boundary_idx_arr': array([8010]), 'delta_t': 0.1, 'params': None, 'return_params_arr': False, 'normalize_dataset': True, 'num_lyaptimesteps_totrain': 3, 'num_timesteps_warmup': 50, 'dir_name_rnn': '/home/rkaushik/Documents/Thesis/MLROM/KS/saved_rnn/rnn_009'}
