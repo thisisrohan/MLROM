@@ -1,0 +1,1 @@
+{'dt_rnn': 0.1, 'T_sample_input': 127.12453842163086, 'T_sample_output': 127.12453842163086, 'T_offset': 0.1, 'boundary_idx_arr': array([8010]), 'delta_t': 0.1, 'params': None, 'return_params_arr': False, 'normalize_dataset': True, 'num_lyaptimesteps_totrain': 10, 'stddev_multiplier': 3}
