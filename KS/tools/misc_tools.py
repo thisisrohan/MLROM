@@ -391,7 +391,9 @@ def create_data_for_RNN(
         normalize_dataset=False,
         normalization_arr_external=None,
         stddev_multiplier=None,
-        FTYPE=FTYPE, ITYPE=ITYPE):
+        FTYPE=FTYPE, ITYPE=ITYPE,
+        skip_intermediate=1,
+        return_OrgDataIdxArr=True):
     '''
     Creates training/testing data for the RNN.
     `data` : numpy array containing all the data
@@ -413,13 +415,21 @@ def create_data_for_RNN(
     # N += 1
     # ######################
 
-    num_sample_input = int((T_input+0.25*dt_rnn) // dt_rnn)
-    num_sample_output = int((T_output+0.25*dt_rnn) // dt_rnn)
-    idx_offset = int((T_offset+0.25*dt_rnn) // dt_rnn)
+    num_sample_input = int((T_input+0.5*dt_rnn) // dt_rnn)
+    num_sample_output = int((T_output+0.5*dt_rnn) // dt_rnn)
+    idx_offset = int((T_offset+0.5*dt_rnn) // dt_rnn)
 
-    idx_to_skip = int((dt_rnn+0.25*delta_t) // delta_t)
+    idx_to_skip = int((dt_rnn+0.5*delta_t) // delta_t)
     # num_samples = (int(N // idx_to_skip) - num_sample_output) // num_sample_input # needs correction?
 #     num_samples = int(N - (idx_offset + num_sample_output - 1)*idx_to_skip)# -1
+
+    if skip_intermediate == 'full sample':
+        skip_intermediate = (num_sample_output+idx_offset)*idx_to_skip
+    elif skip_intermediate < 1.0:
+        skip_intermediate = int((num_sample_output+idx_offset)*idx_to_skip*skip_intermediate)
+    else:
+        skip_intermediate = int(skip_intermediate)
+
 
     if params is not None:
         RNN_data_dim = data.shape[1]+params.shape[1]
@@ -430,36 +440,56 @@ def create_data_for_RNN(
 
     begin_idx = 0
     total_num_samples = 0
+    s = (idx_offset + num_sample_output - 1)*idx_to_skip + 1
     for i in range(len(boundary_idx_arr)):
         N = boundary_idx_arr[i] - begin_idx
-        total_num_samples += int(N - (idx_offset + num_sample_output - 0)*idx_to_skip)
+        # if skip_intermediate == False:
+        #     s = (idx_offset + num_sample_output - 1)*idx_to_skip + 1
+        #     total_num_samples += int(N - s)
+        # else:
+        #     s = (idx_offset + num_sample_output -0)*idx_to_skip
+        #     total_num_samples += int(N//s)
+        total_num_samples += int((N-s-1)//skip_intermediate + 1)
         begin_idx = boundary_idx_arr[i]
 
     data_rnn_input = np.empty(shape=(total_num_samples, num_sample_input, RNN_data_dim), dtype=FTYPE)
     data_rnn_output = np.empty(shape=(total_num_samples, num_sample_output, RNN_data_dim), dtype=FTYPE)
 
-    org_data_idx_arr_input = np.empty(shape=(total_num_samples, num_sample_input), dtype=ITYPE)
-    org_data_idx_arr_output = np.empty(shape=(total_num_samples, num_sample_output), dtype=ITYPE)
+    org_data_idx_arr_input = None
+    org_data_idx_arr_output = None
+    if return_OrgDataIdxArr == True:
+        org_data_idx_arr_input = np.empty(shape=(total_num_samples, num_sample_input), dtype=ITYPE)
+        org_data_idx_arr_output = np.empty(shape=(total_num_samples, num_sample_output), dtype=ITYPE)
 
     begin_idx = 0
     cum_samples = 0
     rnn_data_boundary_idx_arr = np.empty_like(boundary_idx_arr)
+    
+    # skip = 1
+    # if skip_intermediate == True:
+    #     skip = (idx_offset + num_sample_output - 0)*idx_to_skip
+    skip = skip_intermediate
     for i in range(len(boundary_idx_arr)):
         N = boundary_idx_arr[i] - begin_idx
-        num_samples = int(N - (idx_offset + num_sample_output - 0)*idx_to_skip)
-        for j in range(num_samples):
+        # if skip_intermediate == False:
+        #     num_samples = int(N - (idx_offset + num_sample_output - 0)*idx_to_skip)
+        # else:
+        #     num_samples = int(N//((idx_offset + num_sample_output - 0)*idx_to_skip))
+        num_samples = int((N-s-1)//skip_intermediate + 1)
+        for j in range(0, num_samples):
 #             data_rnn_input[i*num_samples+j, :, 0:data.shape[1]] = data[i*N+j:i*N+j + idx_to_skip*num_sample_input:idx_to_skip]
 #             data_rnn_output[i*num_samples+j, :, 0:data.shape[1]] = data[i*N+j + idx_to_skip*idx_offset:i*N+j + idx_to_skip*(idx_offset+num_sample_output):idx_to_skip]
-            data_rnn_input[cum_samples+j, :, 0:data.shape[1]] = data[begin_idx+j:begin_idx+j + idx_to_skip*num_sample_input:idx_to_skip]
-            data_rnn_output[cum_samples+j, :, 0:data.shape[1]] = data[begin_idx+j + idx_to_skip*idx_offset:begin_idx+j + idx_to_skip*(idx_offset+num_sample_output):idx_to_skip]
+            data_rnn_input[cum_samples+j, :, 0:data.shape[1]] = data[begin_idx+j*skip:begin_idx+j*skip + idx_to_skip*num_sample_input:idx_to_skip]
+            data_rnn_output[cum_samples+j, :, 0:data.shape[1]] = data[begin_idx+j*skip + idx_to_skip*idx_offset:begin_idx+j*skip + idx_to_skip*(idx_offset+num_sample_output):idx_to_skip]
 
             if params is not None:
                 for k in range(params.shape[1]):
                     data_rnn_input[cum_samples+j, :, data.shape[1]+k] = params[i, k]
                     data_rnn_output[cum_samples+j, :, data.shape[1]+k] = params[i, k]
 
-            org_data_idx_arr_input[cum_samples+j, :] = np.arange(begin_idx+j, begin_idx+j + idx_to_skip*num_sample_input, idx_to_skip)
-            org_data_idx_arr_output[cum_samples+j, :] = np.arange(begin_idx+j + idx_to_skip*idx_offset, begin_idx+j + idx_to_skip*(idx_offset+num_sample_output), idx_to_skip)
+            if return_OrgDataIdxArr == True:
+                org_data_idx_arr_input[cum_samples+j, :] = np.arange(begin_idx+j*skip, begin_idx+j*skip + idx_to_skip*num_sample_input, idx_to_skip)
+                org_data_idx_arr_output[cum_samples+j, :] = np.arange(begin_idx+j*skip + idx_to_skip*idx_offset, begin_idx+j*skip + idx_to_skip*(idx_offset+num_sample_output), idx_to_skip)
         cum_samples += num_samples
         rnn_data_boundary_idx_arr[i] = cum_samples
         begin_idx = boundary_idx_arr[i]
