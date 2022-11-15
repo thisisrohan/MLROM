@@ -393,7 +393,8 @@ def create_data_for_RNN(
         stddev_multiplier=None,
         FTYPE=FTYPE, ITYPE=ITYPE,
         skip_intermediate=1,
-        return_OrgDataIdxArr=True):
+        return_OrgDataIdxArr=True,
+        normalization_type='stddev'):
     '''
     Creates training/testing data for the RNN.
     `data` : numpy array containing all the data
@@ -497,16 +498,28 @@ def create_data_for_RNN(
     normalization_arr = None
     if normalize_dataset == True:
         if normalization_arr_external is None:
-            if stddev_multiplier is None:
-                stddev_multiplier = 1.414213
             normalization_arr = np.empty(shape=(2, data.shape[1]), dtype=FTYPE)
-            for i in range(data.shape[1]):
-                sample_mean = np.mean(data[:, i])
-                sample_std = np.std(data[:, i])
-                normalization_arr[0, i] = sample_mean
-                normalization_arr[1, i] = stddev_multiplier*sample_std
+            if normalization_type == 'stddev':
+                if stddev_multiplier is None:
+                    stddev_multiplier = 1.414213
+                for i in range(data.shape[1]):
+                    sample_mean = np.mean(data[:, i])
+                    sample_std = np.std(data[:, i])
+                    normalization_arr[0, i] = sample_mean
+                    normalization_arr[1, i] = stddev_multiplier*sample_std
+            elif normalization_type == 'minmax':
+                for i in range(data.shape[1]):
+                    sample_min = np.min(data[:, i])
+                    sample_max = np.max(data[:, i])
+                    if sample_max - sample_min != 0:
+                        normalization_arr[0, i] = sample_min
+                        normalization_arr[1, i] = sample_max - sample_min
+                    else:
+                        normalization_arr[0, i] = sample_min-0.5
+                        normalization_arr[1, i] = 1.0
         else:
             normalization_arr = normalization_arr_external.copy()
+        
         for i in range(data.shape[1]):
             data_rnn_input[:, :, i] -= normalization_arr[0, i]
             data_rnn_input[:, :, i] /= normalization_arr[1, i]

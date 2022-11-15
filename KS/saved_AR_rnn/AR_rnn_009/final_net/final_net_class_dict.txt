@@ -1,0 +1,1 @@
+{'data_dim': 32, 'dt_rnn': 0.2, 'lambda_reg': 0.0001, 'reg_name': 'L2', 'rnn_layers_units': [512], 'dense_layer_act_func': 'linear', 'load_file': '/home/rkaushik/Documents/Thesis/MLROM/KS/saved_rnn/rnn_020/final_net/final_net_class_dict.txt', 'in_steps': 50, 'out_steps': 10, 'stddev': 0.010080738365650177, 'mean': 0.0}

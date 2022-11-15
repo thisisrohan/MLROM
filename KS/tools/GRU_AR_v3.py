@@ -141,6 +141,7 @@ class AR_RNN_GRU(Model):
 
             self.dense = layers.Dense(
                 self.data_dim,
+                activation=self.dense_layer_act_func,
                 # kernel_initializer=tf.initializers.zeros(),
                 kernel_regularizer=reg(self.lambda_reg),
                 bias_regularizer=reg(self.lambda_reg)
@@ -154,6 +155,7 @@ class AR_RNN_GRU(Model):
 
             self.dense = layers.Dense(
                 self.data_dim,
+                activation=self.dense_layer_act_func,
                 # kernel_initializer=tf.initializers.zeros(),
             )
 

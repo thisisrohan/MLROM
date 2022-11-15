@@ -1,9 +1,10 @@
 ################################################################################
 # In this GRU the output = P1 @ phi + P2 @ phi^2, where phi is the output of   #
 # the GRU and P1 is the regular dense layer that normally sits on top of the   #
-# GRU. P2 is an extension of that dense layer that also acts on the elementwise#
-# square of phi. This is an idea from one of Pathak et al's papers.            #
-# Also uniform noise is being added to the RNN inputs in each prediction.      #
+# GRU. P2 is an extension of that dense layer that also acts on the            #
+# elementwise square of phi. This is an idea from one of Pathak et al's papers.#
+# Also uniform/normal noise is being added to the RNN inputs in each           #
+# prediction.                                                                  #
 ################################################################################
 
 import os
@@ -57,23 +58,21 @@ class RNN_GRU(Model):
     """
     def __init__(
             self, data_dim=None,
-            # in_steps=None,
-            # out_steps=None,
             dt_rnn=None,
             lambda_reg=0.0,
             reg_name='L2',
             rnn_layers_units=[3, 3, 3],
             dense_layer_act_func='linear',
             load_file=None,
+            stddev=0.0,
             mean=0.0,
-            stddev=1e-5):
+            noise_type='uniform',
+            dense_dim=None):
         
         super(RNN_GRU, self).__init__()
 
         self.load_file = load_file
-        # if self.load_file == None:
         self.data_dim = data_dim
-        # self.out_steps = out_steps
         self.dt_rnn = dt_rnn
         self.lambda_reg = lambda_reg
         self.reg_name = reg_name
@@ -81,13 +80,14 @@ class RNN_GRU(Model):
         self.dense_layer_act_func = dense_layer_act_func
         self.mean = mean
         self.stddev = stddev
+        self.noise_type = noise_type
+        self.dense_dim = dense_dim
         if self.load_file is not None:
             with open(load_file, 'r') as f:
                 lines = f.readlines()
             load_dict = eval(lines[0])
             if 'data_dim' in load_dict.keys():
                 self.data_dim = load_dict['data_dim']
-            # self.out_steps = load_dict['out_steps']
             if 'dt_rnn' in load_dict.keys():
                 self.dt_rnn = load_dict['dt_rnn']
             if 'lambda_reg' in load_dict.keys():
@@ -102,7 +102,29 @@ class RNN_GRU(Model):
                 self.mean = load_dict['mean']
             if 'stddev' in load_dict.keys():
                 self.stddev = load_dict['stddev']
+            if 'noise_type' in load_dict.keys():
+                self.noise_type = load_dict['noise_type']
+            if 'dense_dim' in load_dict.keys():
+                self.dense_dim = load_dict['dense_dim']
         self.num_rnn_layers = len(self.rnn_layers_units)
+
+        if isinstance(self.dense_layer_act_func, list) == False:
+            self.dense_layer_act_func = [self.dense_layer_act_func]
+
+        if self.dense_dim is None:
+            self.dense_dim = [self.data_dim]*len(self.dense_layer_act_func)
+
+        self.noise_gen = eval('tf.random.'+self.noise_type)
+        if self.noise_type == 'uniform':
+            self.noise_kwargs = {
+                'minval':self.mean-1.732051*self.stddev,
+                'maxval':self.mean+1.732051*self.stddev
+            }
+        elif self.noise_type == 'normal':
+            self.noise_kwargs = {
+                'mean':self.mean,
+                'stddev':self.stddev
+            }
 
 
         ### the GRU network
@@ -118,15 +140,19 @@ class RNN_GRU(Model):
             
             self.hidden_states_list = [learnable_state(hidden_shape=units, b_regularizer=reg(self.lambda_reg)) for units in self.rnn_layers_units]
 
-            self.dense1 = layers.Dense(
-                self.data_dim,
-                # kernel_initializer=tf.initializers.zeros(),
-                kernel_regularizer=reg(self.lambda_reg),
-                bias_regularizer=reg(self.lambda_reg)
-            )
+            self.dense1 = [
+                layers.Dense(
+                    self.dense_dim[i],
+                    activation=self.dense_layer_act_func[i],
+                    # kernel_initializer=tf.initializers.zeros(),
+                    kernel_regularizer=reg(self.lambda_reg),
+                    bias_regularizer=reg(self.lambda_reg)
+                ) for i in range(len(self.dense_layer_act_func))
+            ]
             
             self.dense2 = layers.Dense(
-                self.data_dim,
+                self.dense_dim[0],
+                activation=self.dense_layer_act_func[0],
                 # kernel_initializer=tf.initializers.zeros(),
                 kernel_regularizer=reg(self.lambda_reg),
                 bias_regularizer=reg(self.lambda_reg)
@@ -138,15 +164,21 @@ class RNN_GRU(Model):
             
             self.hidden_states_list = [learnable_state(hidden_shape=units) for units in self.rnn_layers_units]
 
-            self.dense1 = layers.Dense(
-                self.data_dim,
-                # kernel_initializer=tf.initializers.zeros(),
-            )
+            self.dense1 = [
+                layers.Dense(
+                    self.dense_dim[i],
+                    activation=self.dense_layer_act_func[i],
+                    # kernel_initializer=tf.initializers.zeros(),
+                ) for i in range(len(self.dense_layer_act_func))
+            ]
+
             
             self.dense2 = layers.Dense(
-                self.data_dim,
+                self.dense_dim[0],
+                activation=self.dense_layer_act_func[0],
                 # kernel_initializer=tf.initializers.zeros(),
             )
+
 
 
         ### initializing weights
@@ -167,33 +199,35 @@ class RNN_GRU(Model):
         states_list = []
         # first step
         prediction = inputs[:, 0, :]
-        prediction += tf.random.uniform(shape=tf.shape(prediction), minval=self.mean-1.732051*self.stddev, maxval=self.mean+1.732051*self.stddev)
+        prediction = prediction + self.noise_gen(shape=tf.shape(prediction), **self.noise_kwargs)
         for j in range(self.num_rnn_layers):
             state1 = self.hidden_states_list[j](prediction, training=training)
-            
             prediction, *states = self.rnn_cells_list[j](
                 prediction,
                 states=state1,
                 training=training,
             )
             states_list.append(states[0])
-        prediction = self.dense1(prediction, training=training) + self.dense2(tf.math.square(prediction), training=training)
+        prediction = self.dense1[0](prediction, training=training) + self.dense2(tf.math.square(prediction), training=training)
+        for j in range(1, len(self.dense_layer_act_func)):
+            prediction = self.dense1[j](prediction, training=training)
         predictions_list.append(prediction)
 
         ### Remaining number of time-steps
         for i in range(1, out_steps):
             prediction = inputs[:, i, :]
-            prediction += tf.random.uniform(shape=tf.shape(prediction), minval=self.mean-1.732051*self.stddev, maxval=self.mean+1.732051*self.stddev)
+            prediction = prediction + self.noise_gen(shape=tf.shape(prediction), **self.noise_kwargs)
             for j in range(self.num_rnn_layers):
                 state1 = states_list[j]
-                # state1 = state1 + tf.random.uniform(shape=tf.shape(state1), minval=self.mean-1.732051*self.stddev, maxval=self.mean+1.732051*self.stddev)
                 prediction, *states = self.rnn_cells_list[j](
                     prediction,
                     states=state1,
                     training=training,
                 )
                 states_list[j] = states[0]
-            prediction = self.dense1(prediction, training=training) + self.dense2(tf.math.square(prediction), training=training)
+            prediction = self.dense1[0](prediction, training=training) + self.dense2(tf.math.square(prediction), training=training)
+            for j in range(1, len(self.dense_layer_act_func)):
+                prediction = self.dense1[j](prediction, training=training)
             predictions_list.append(prediction)
 
         # predictions_list.shape => (time, batch, features)
@@ -219,15 +253,17 @@ class RNN_GRU(Model):
         
         class_dict = {
             'data_dim':self.data_dim,
-            # 'out_steps':self.out_steps,
             'dt_rnn':self.dt_rnn,
             'lambda_reg':self.lambda_reg,
             'reg_name':self.reg_name,
             'rnn_layers_units':list(self.rnn_layers_units),
-            'dense_layer_act_func':self.dense_layer_act_func,
+            'dense_layer_act_func':list(self.dense_layer_act_func),
             'load_file':self.load_file,
             'mean':self.mean,
-            'stddev':self.stddev
+            'stddev':self.stddev,
+            'noise_type':self.noise_type,
+            'module':self.__module__,
+            'dense_dim':list(self.dense_dim),
         }
         with open(file_name, 'w') as f:
             f.write(str(class_dict))
