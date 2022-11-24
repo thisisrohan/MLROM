@@ -23,7 +23,8 @@ class Autoencoder(Model):
             enc_final_layer_act_func='tanh',
             dec_layer_act_func='elu',
             dec_final_layer_act_func='linear',
-            load_file=None):
+            load_file=None,
+            stddev=None):
         
         super(Autoencoder, self).__init__()
 
@@ -192,6 +193,7 @@ class Autoencoder(Model):
             'dec_layer_act_func':self.dec_layer_act_func,
             'dec_final_layer_act_func':self.dec_final_layer_act_func,
             'load_file':self.load_file,
+            'module':self.__module__,
         }
         with open(file_name, 'w') as f:
             f.write(str(class_dict))

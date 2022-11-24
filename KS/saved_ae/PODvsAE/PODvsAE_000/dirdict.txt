@@ -1,0 +1,2 @@
+{'chosen_dir_list': array(['ae_044', 'ae_045', 'ae_046', 'ae_041', 'ae_047', 'ae_043'],
+      dtype='<U6'), 'data_dir_idx': '005'}

@@ -1,0 +1,1 @@
+{'params_mat': array([[1., 1., 1.]]), 't0': 0.0, 'T': 50002.549531181365, 'delta_t': 0.1, 'numpoints_xgrid': 64, 'length': 35, 'return_params_arr': False, 'normalize_flag': False, 'alldata_withparams_flag': True, 'prng_seed': 42, 'total_lyaptimesteps_totrain': 3233}

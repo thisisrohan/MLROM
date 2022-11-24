@@ -65,13 +65,15 @@ class AR_RNN_GRU(Model):
             load_file=None,
             stddev=None,
             mean=None,
-            noise_type='uniform'):
+            noise_type='uniform',
+            dense_dim=None):
         
         super(AR_RNN_GRU, self).__init__()
-
+        
         self.mean = mean
         self.stddev = stddev
         self.noise_type = noise_type
+        self.dense_dim = dense_dim
 
         self.load_file = load_file
         if self.load_file == None:
@@ -83,7 +85,6 @@ class AR_RNN_GRU(Model):
             self.reg_name = reg_name
             self.rnn_layers_units = rnn_layers_units
             self.dense_layer_act_func = dense_layer_act_func
-            self.noise_type = noise_type
         else:
             with open(load_file, 'r') as f:
                 lines = f.readlines()
@@ -108,7 +109,15 @@ class AR_RNN_GRU(Model):
                 self.mean = int(load_dict['mean'])
             if 'noise_type' in load_dict.keys():
                 self.noise_type = load_dict['noise_type']
+            if 'dense_dim' in load_dict.keys():
+                self.dense_dim = load_dict['dense_dim']
         self.num_rnn_layers = len(self.rnn_layers_units)
+
+        if isinstance(self.dense_layer_act_func, list) == False:
+            self.dense_layer_act_func = [self.dense_layer_act_func]
+
+        if self.dense_dim is None:
+            self.dense_dim = [self.data_dim]*len(self.dense_layer_act_func)
 
         ### time steps
         if T_input is not None:
@@ -153,13 +162,15 @@ class AR_RNN_GRU(Model):
     		learnable_state(hidden_shape=units, b_regularizer=reg(self.lambda_reg)) for units in self.rnn_layers_units
             ]
 
-            self.dense = layers.Dense(
-                self.data_dim,
-                activation=self.dense_layer_act_func,
-                # kernel_initializer=tf.initializers.zeros(),
-                kernel_regularizer=reg(self.lambda_reg),
-                bias_regularizer=reg(self.lambda_reg)
-            )
+            self.dense = [
+                layers.Dense(
+                    self.dense_dim[i],
+                    activation=self.dense_layer_act_func[i],
+                    # kernel_initializer=tf.initializers.zeros(),
+                    kernel_regularizer=reg(self.lambda_reg),
+                    bias_regularizer=reg(self.lambda_reg)
+                ) for i in range(len(self.dense_layer_act_func))
+            ]
         else:
             self.rnn_cells_list = [
                 layers.GRUCell(units=units) for units in self.rnn_layers_units
@@ -169,11 +180,13 @@ class AR_RNN_GRU(Model):
                 learnable_state(hidden_shape=units) for units in self.rnn_layers_units
             ]
 
-            self.dense = layers.Dense(
-                self.data_dim,
-                activation=self.dense_layer_act_func,
-                # kernel_initializer=tf.initializers.zeros(),
-            )
+            self.dense = [
+                layers.Dense(
+                    self.dense_dim[i],
+                    activation=self.dense_layer_act_func[i],
+                    # kernel_initializer=tf.initializers.zeros()
+                ) for i in range(len(self.dense_layer_act_func))
+            ]
 
 
         ### initializing weights
@@ -188,7 +201,7 @@ class AR_RNN_GRU(Model):
         states_list = []
         # first step
         x = inputs[:, 0, :]
-        x = x + tself.noise_gen(shape=tf.shape(x), **self.noise_kwargs)
+        x = x + self.noise_gen(shape=tf.shape(x), **self.noise_kwargs)
         state1 = self.hidden_states_list[0](x, training=training)
         prediction, *states = self.rnn_cells_list[0](
             x,
@@ -229,7 +242,8 @@ class AR_RNN_GRU(Model):
                 )
                 states_list[j] = states[0]
                 x = prediction + x
-        prediction = self.dense(x, training=training)
+        for j in range(len(self.dense_layer_act_func)):
+            prediction = self.dense[j](prediction, training=training)
 
         return prediction, states_list
         
@@ -262,7 +276,8 @@ class AR_RNN_GRU(Model):
                 )
                 states_list[j] = states[0]
                 x = prediction + x
-            prediction = self.dense(x, training=training)
+            for j in range(len(self.dense_layer_act_func)):
+                prediction = self.dense[j](prediction, training=training)
             predictions_list.append(prediction)
 
         # predictions_list.shape => (time, batch, features)
@@ -291,13 +306,15 @@ class AR_RNN_GRU(Model):
             'lambda_reg':self.lambda_reg,
             'reg_name':self.reg_name,
             'rnn_layers_units':list(self.rnn_layers_units),
-            'dense_layer_act_func':self.dense_layer_act_func,
+            'dense_layer_act_func':list(self.dense_layer_act_func),
             'load_file':self.load_file,
             'in_steps':self.in_steps,
             'out_steps':self.out_steps,
             'stddev':self.stddev,
             'mean':self.mean,
             'noise_type':self.noise_type,
+            'module':self.__module__,
+            'dense_dim':list(self.dense_dim),
         }
         with open(file_name, 'w') as f:
             f.write(str(class_dict))

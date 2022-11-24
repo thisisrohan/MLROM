@@ -1,0 +1,1 @@
+{'data_dim': 48, 'dt_rnn': 0.2, 'lambda_reg': 0.0001, 'reg_name': 'L2', 'rnn_layers_units': [256, 256, 256], 'dense_layer_act_func': ['linear'], 'load_file': None, 'mean': 0.0, 'stddev': 0.003872103989124298, 'noise_type': 'uniform', 'module': 'tools.GRU_SingleStep_v8', 'dense_dim': [48]}

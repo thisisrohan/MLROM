@@ -1,0 +1,1 @@
+{'data_dim': 64, 'enc_layers': [128, 96, 64], 'dec_layers': [64, 96, 128], 'latent_space_dim': 48, 'lambda_reg': 0.0001, 'reg_name': 'L2', 'enc_layer_act_func': 'relu', 'enc_final_layer_act_func': 'tanh', 'dec_layer_act_func': 'relu', 'dec_final_layer_act_func': 'tanh', 'load_file': None, 'stddev': 0.0033129805326461794, 'module': 'tools.ae_v4'}

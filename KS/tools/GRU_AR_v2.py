@@ -225,7 +225,39 @@ class AR_RNN_GRU(Model):
     @tf.function
     def call(self, inputs, training=None):
         predictions_list = []
-        prediction, states_list = self._warmup(inputs, training=False)
+        # prediction, states_list = self._warmup(inputs, training=training)
+
+        ####### WARMUP #######
+        ### Initialize the GRU state.
+        states_list = []
+        # first step
+        prediction = inputs[:, 0, :]
+        prediction = prediction + self.noise_gen(shape=tf.shape(prediction), **self.noise_kwargs)
+        for j in range(self.num_rnn_layers):
+            prediction, *states = self.rnn_cells_list[j](
+                prediction,
+                states=self.hidden_states_list[j](prediction, training=training),
+                training=training
+            )
+            states_list.append(states[0])
+
+        # remaining number of input steps
+        for i in range(1, self.in_steps):
+            prediction = inputs[:, i, :]
+            preditcion = prediction + self.noise_gen(shape=tf.shape(prediction), **self.noise_kwargs)
+            for j in range(self.num_rnn_layers):
+                prediction, *states = self.rnn_cells_list[j](
+                    prediction,
+                    states=states_list[j],
+                    training=training
+                )
+                states_list[j] = states[0]
+
+        # pass final RNN output through the dense layer to get final prediction
+        for j in range(len(self.dense_layer_act_func)):
+            prediction = self.dense[j](prediction, training=training)
+
+        ####### WARMUP DONE #######
 
         # first prediction
         predictions_list.append(prediction)
@@ -269,13 +301,15 @@ class AR_RNN_GRU(Model):
             'lambda_reg':self.lambda_reg,
             'reg_name':self.reg_name,
             'rnn_layers_units':list(self.rnn_layers_units),
-            'dense_layer_act_func':self.dense_layer_act_func,
+            'dense_layer_act_func':list(self.dense_layer_act_func),
             'load_file':self.load_file,
             'in_steps':self.in_steps,
             'out_steps':self.out_steps,
             'stddev':self.stddev,
             'mean':self.mean,
             'noise_type':self.noise_type,
+            'module':self.__module__,
+            'dense_dim':list(self.dense_dim),
         }
         with open(file_name, 'w') as f:
             f.write(str(class_dict))

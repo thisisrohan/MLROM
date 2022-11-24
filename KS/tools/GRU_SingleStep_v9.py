@@ -65,7 +65,7 @@ class scalar_multipliers(layers.Layer):
         )
 
     def call(self, x, idx=0):
-        multiplier = tf.math.exp(self.scalars[idx])/tf.math.sum(tf.math.exp(self.scalars))
+        multiplier = tf.math.exp(self.scalars[idx])/tf.math.reduce_sum(tf.math.exp(self.scalars))
         return multiplier*x
 
 
@@ -219,7 +219,7 @@ class RNN_GRU(Model):
         x = inputs[:, 0, :]
         x = x + self.noise_gen(shape=tf.shape(x), **self.noise_kwargs)
         state1 = self.hidden_states_list[0](x, training=training)
-        prediction, *states = self.rnn_cells_list[j](
+        prediction, *states = self.rnn_cells_list[0](
             x,
             states=state1,
             training=training,
@@ -238,8 +238,8 @@ class RNN_GRU(Model):
             intermediate_outputs_lst.append(prediction)
             x = intermediate_outputs_lst[0] + prediction
         x = intermediate_outputs_lst[0]
-        for j in range(self.num_skip_connections)
-            x = x + self.final_scalar_multipliers(intermediate_outputs_list[j+1], idx=j)
+        for j in range(self.num_skip_connections):
+            x = x + self.final_scalar_multipliers(intermediate_outputs_lst[j+1], idx=j)
         for j in range(len(self.dense_layer_act_func)):
             prediction = self.dense[j](prediction, training=training)
         predictions_list.append(prediction)
@@ -268,8 +268,8 @@ class RNN_GRU(Model):
                 intermediate_outputs_lst[j] = prediction
                 x = intermediate_outputs_lst[0] + prediction
             x = intermediate_outputs_lst[0]
-            for j in range(self.num_skip_connections)
-                x = x + self.final_scalar_multipliers(intermediate_outputs_list[j+1], idx=j)
+            for j in range(self.num_skip_connections):
+                x = x + self.final_scalar_multipliers(intermediate_outputs_lst[j+1], idx=j)
             for j in range(len(self.dense_layer_act_func)):
                 prediction = self.dense[j](prediction, training=training)
             predictions_list.append(prediction)
