@@ -1,0 +1,1 @@
+{'data_dim': 16, 'dt_rnn': 0.2, 'lambda_reg': 0.0001, 'ESN_layers_units': [5000], 'mean': 0.0, 'stddev': 0.000826655924320221, 'noise_type': 'normal', 'stateful': True, 'omega_in': [1.0], 'sparsity': [0.987997599519904], 'rho_res': [0.9], 'usebias_Win': [False], 'prng_seed': 42, 'alpha': [1.0], 'ESN_cell_activations': ['tanh'], 'usebias_Wout': True}
