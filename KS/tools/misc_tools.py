@@ -498,25 +498,91 @@ def create_data_for_RNN(
     normalization_arr = None
     if normalize_dataset == True:
         if normalization_arr_external is None:
-            normalization_arr = np.empty(shape=(2, data.shape[1]), dtype=FTYPE)
-            if normalization_type == 'stddev':
-                if stddev_multiplier is None:
-                    stddev_multiplier = 1.414213
-                for i in range(data.shape[1]):
-                    sample_mean = np.mean(data[:, i])
-                    sample_std = np.std(data[:, i])
-                    normalization_arr[0, i] = sample_mean
-                    normalization_arr[1, i] = stddev_multiplier*sample_std
-            elif normalization_type == 'minmax':
+            def minmax(data, **kwargs):
+                norm_arr_upto_that_point = kwargs.pop('normalization_arr', None)
+                normalization_arr = np.empty(shape=(2, data.shape[1]), dtype=FTYPE)
                 for i in range(data.shape[1]):
                     sample_min = np.min(data[:, i])
                     sample_max = np.max(data[:, i])
+                    if type(norm_arr_upto_that_point) != type(None):
+                        sample_min = (sample_min - norm_arr_upto_that_point[0, i])/norm_arr_upto_that_point[1, i]
+                        sample_max = (sample_max - norm_arr_upto_that_point[0, i])/norm_arr_upto_that_point[1, i]
                     if sample_max - sample_min != 0:
                         normalization_arr[0, i] = sample_min
                         normalization_arr[1, i] = sample_max - sample_min
                     else:
                         normalization_arr[0, i] = sample_min-0.5
                         normalization_arr[1, i] = 1.0
+                return data, normalization_arr
+
+            def minmax2(data, **kwargs):
+                norm_arr_upto_that_point = kwargs.pop('normalization_arr', None)
+                normalization_arr = np.empty(shape=(2, data.shape[1]), dtype=FTYPE)
+                for i in range(data.shape[1]):
+                    sample_min = np.min(data[:, i])
+                    sample_max = np.max(data[:, i])
+                    if type(norm_arr_upto_that_point) != type(None):
+                        sample_min = (sample_min - norm_arr_upto_that_point[0, i])/norm_arr_upto_that_point[1, i]
+                        sample_max = (sample_max - norm_arr_upto_that_point[0, i])/norm_arr_upto_that_point[1, i]
+                    if sample_max - sample_min != 0:
+                        normalization_arr[0, i] = 0.5*(sample_min + sample_max)
+                        normalization_arr[1, i] = 0.5*(sample_max - sample_min)
+                    else:
+                        normalization_arr[0, i] = sample_min
+                        normalization_arr[1, i] = 1.0
+                return normalization_arr
+
+            def stddev(data, **kwargs):
+                stddev_multiplier = kwargs.pop('stddev_multiplier', None)
+                norm_arr_upto_that_point = kwargs.pop('normalization_arr', None)
+                normalization_arr = np.empty(shape=(2, data.shape[1]), dtype=FTYPE)
+                if stddev_multiplier is None:
+                    stddev_multiplier = 1.414213
+                for i in range(data.shape[1]):
+                    sample_mean = np.mean(data[:, i])
+                    sample_std = np.std(data[:, i])
+                    if type(norm_arr_upto_that_point) != type(None):
+                        sample_mean = (sample_mean - norm_arr_upto_that_point[0, i])/norm_arr_upto_that_point[1, i]
+                        sample_std = sample_std / norm_arr_upto_that_point[1, i]
+                    normalization_arr[0, i] = sample_mean
+                    normalization_arr[1, i] = stddev_multiplier*sample_std
+                return normalization_arr
+
+            def update_normalizationarr(norm_arr_upto_that_point, new_norm_arr):
+                if type(norm_arr_upto_that_point) == type(None):
+                    norm_arr_upto_that_point = np.ones_like(new_norm_arr)
+                    norm_arr_upto_that_point[0, :] = 0.0
+                norm_arr_upto_that_point[0, :] += new_norm_arr[0, :]*norm_arr_upto_that_point[1, :]
+                norm_arr_upto_that_point[1, :] *= new_norm_arr[1, :]
+                return norm_arr_upto_that_point
+
+            tfunc_dict = {
+                'minmax' : minmax,
+                'minmax2' : minmax2,
+                'stddev' : stddev,
+            }
+
+            normalization_arr = None
+            if type(normalization_type) == type([]):
+                # it's a list of sequential transformations
+                for i in range(len(normalization_type)):
+                    transformation = normalization_type[i]
+                    tfunc = tfunc_dict[transformation]
+                    kwargs = {
+                        'stddev_multiplier':stddev_multiplier,
+                        'normalization_arr':normalization_arr
+                    }
+                    this_tfunc_norm_arr = tfunc(data, **kwargs)
+                    normalization_arr = update_normalizationarr(normalization_arr, this_tfunc_norm_arr)
+            else:
+                transformation = normalization_type
+                tfunc = tfunc_dict[transformation]
+                kwargs = {
+                    'stddev_multiplier':stddev_multiplier,
+                    'normalization_arr':normalization_arr
+                }
+                this_tfunc_norm_arr = tfunc(data, **kwargs)
+                normalization_arr = update_normalizationarr(normalization_arr, this_tfunc_norm_arr)
         else:
             normalization_arr = normalization_arr_external.copy()
         

@@ -37,7 +37,7 @@ np.random.seed(prng_seed)
 tf.random.set_seed(prng_seed)
 
 worker_id = 0
-tf.config.set_visible_devices(tf.config.list_physical_devices('GPU')[1], 'GPU')
+tf.config.set_visible_devices(tf.config.list_physical_devices('GPU')[worker_id], 'GPU')
 
 
 #---------- making rnn_all save directory ----------#

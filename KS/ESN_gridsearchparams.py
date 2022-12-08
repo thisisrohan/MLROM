@@ -2,10 +2,10 @@ import numpy as np
 import os
 
 ### define grid search params
-res_size = [2000, 5000]
+res_size = [5000]
 omega_in = [0.6, 0.8, 1.]
 rho_res = [0.4, 0.6, 0.8]
-alpha = [0.75, 0.1]
+alpha = [1.]
 deg_of_connectivity = [3, 20, 80, 200]
 num_workers = 2 # number of gpus/threads/workers that will be used in training
 
@@ -34,7 +34,7 @@ np.savez(
     deg_of_connectivity=deg_of_connectivity,
 )
 
-
+### splitting work amongst the workers
 total_num_params = len(res_size)*len(omega_in)*len(rho_res)*len(alpha)*len(deg_of_connectivity)
 
 partitions = np.int32(np.linspace(0, total_num_params, num_workers+1))
@@ -60,5 +60,17 @@ for i in range(num_workers):
         gsp=big_mat[partitions[i]:partitions[i+1], :],
         column_names=['res_size', 'omega_in', 'rho_res', 'alpha', 'deg_of_connectivity']
     )
+
+
+### saving params in human readable format
+save_dict = {
+    'alpha':list(alpha),
+    'deg_of_connectivity':list(deg_of_connectivity),
+    'omega_in':list(omega_in),
+    'res_size':list(res_size),
+    'rho_res':list(rho_res),
+}
+with open(dir_gs+'/gridsearch_params.txt', 'w') as fl:
+    fl.write(str(save_dict))
 
     

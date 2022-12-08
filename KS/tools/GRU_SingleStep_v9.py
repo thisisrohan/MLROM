@@ -1,6 +1,6 @@
 ################################################################################
 # RK Methods inspired residual GRU with skip connections, with uniform/normal  #
-# noise added to every input.                                                  #
+# noise added to every input and learnable initial states.                     #
 #------------------------------------------------------------------------------#
 #                        Basic Network Architecture                            #
 #------------------------------------------------------------------------------#
@@ -17,8 +17,8 @@
 # (a1, a2 and a3 are scalars that determine a weighted average and sum to 1)   #
 #                                                                              #
 # Note here that you can only specify the number of layers and the number of   #
-# units in a layer, not the number of units in each layer individually. Also, a#
-# single layer network is the same as a regular GRU.                           #
+# units in a layer, not the number of units in each layer individually. Also,  #
+# a single layer network is the same as a regular GRU.                         #
 ################################################################################
 
 import os
@@ -54,21 +54,6 @@ class learnable_state(layers.Layer):
         return tf.tile(self.learnable_variable, [batch_size, 1])
 
 
-class scalar_multipliers(layers.Layer):
-    def __init__(self, num_skip_connections, **kwargs):
-        super(scalar_multipliers, self).__init__()
-        self.scalars = self.add_weight(
-            name='final scalar multipliers',
-            shape=[num_skip_connections],
-            initializer=tf.keras.initializers.RandomNormal(mean=0.0, stddev=1.0),
-            trainable=True
-        )
-
-    def call(self, x, idx=0):
-        multiplier = tf.math.exp(self.scalars[idx])/tf.math.reduce_sum(tf.math.exp(self.scalars))
-        return multiplier*x
-
-
 class uniform_noise(layers.Layer):
     def __init__(self, mean=0.0, stddev=1e-4, **kwargs):
         super(uniform_noise, self).__init__()
@@ -78,6 +63,37 @@ class uniform_noise(layers.Layer):
     def call(self, x):
         x = x + tf.random.uniform(shape=tf.shape(x), minval=self.mean-1.732051*self.stddev, maxval=self.mean+1.732051*self.stddev)
         return x
+
+
+class GRUCell_zoneout(layers.GRUCell):
+    def __init__(self, **kwargs):
+        self.zoneout_rate = kwargs.pop('zoneout_rate', 0.0)
+        super(GRUCell_zoneout, self).__init__(**kwargs)
+
+    def call(self, inputs, states, training=None):
+        h_tm1 = (
+            states[0] if tf.nest.is_nested(states) else states
+        )
+        output, candidate_states = super(GRUCell_zoneout, self).call(
+            inputs,
+            states,
+            training
+        )
+        if 0.0 < self.zoneout_rate < 1.0:
+            h_tcandidate = (
+                candidate_states[0] if tf.nest.is_nested(candidate_states) else candidate_states
+            )
+            if training == True:
+                zoneout_mask = self._random_generator.dropout(tf.ones_like(h_tm1), self.zoneout_rate) # this is the matrix equivalent of 1-self.zoneout_rate
+                h_t = h_tm1 + zoneout_mask * (h_tcandidate - h_tm1)
+            else:
+                h_t = h_tcandidate + self.zoneout_rate * (h_tm1 - h_tcandidate)
+            h_t = [h_t] if tf.nest.is_nested(states) else h_t
+        else:
+            h_t = candidate_states
+
+        return output, h_t
+        
 
 
 class RNN_GRU(Model):
@@ -96,7 +112,11 @@ class RNN_GRU(Model):
             stddev=0.0,
             mean=0.0,
             noise_type='uniform',
-            dense_dim=None):
+            dense_dim=None,
+            use_learnable_state=True,
+            stateful=False,
+            zoneout_rate=0.0,
+            batch_size=1):
         
         super(RNN_GRU, self).__init__()
 
@@ -111,6 +131,10 @@ class RNN_GRU(Model):
         self.stddev = stddev
         self.noise_type = noise_type
         self.dense_dim = dense_dim
+        self.use_learnable_state = use_learnable_state
+        self.batch_size = batch_size
+        self.stateful = stateful # ideally do not use `stateful`=True and `use_learnable_state`=True at the same time.
+        self.zoneout_rate = zoneout_rate
         if self.load_file is not None:
             with open(load_file, 'r') as f:
                 lines = f.readlines()
@@ -135,6 +159,12 @@ class RNN_GRU(Model):
                 self.noise_type = load_dict['noise_type']
             if 'dense_dim' in load_dict.keys():
                 self.dense_dim = load_dict['dense_dim']
+            if 'use_learnable_state' in load_dict.keys():
+                self.use_learnable_state = load_dict['use_learnable_state']
+            if 'zoneout_rate' in load_dict.keys():
+                self.zoneout_rate = load_dict['zoneout_rate']
+            if 'stateful' in load_dict.keys():
+                self.stateful = load_dict['stateful']
         self.num_rnn_layers = len(self.rnn_layers_units)
 
         if isinstance(self.dense_layer_act_func, list) == False:
@@ -157,21 +187,34 @@ class RNN_GRU(Model):
             }
         self.num_skip_connections = self.num_rnn_layers - 1
         
-        if self.num_skip_connections > 0:
-            self.final_scalar_multipliers = scalar_multipliers(self.num_skip_connections)
+        # if self.num_skip_connections > 0:
+        #    self.final_scalar_multipliers = scalar_multipliers(self.num_skip_connections)
 
         ### the GRU network
+        self.hidden_states_list = []
         if self.reg_name != None and self.lambda_reg != None and self.lambda_reg != 0:
             reg = eval('tf.keras.regularizers.'+self.reg_name)
-            self.rnn_cells_list = [
-                layers.GRUCell(
-                    units=units,
-                    kernel_regularizer=reg(self.lambda_reg),
-                    bias_regularizer=reg(self.lambda_reg)
+            self.rnn_list = [
+                layers.RNN(
+                    cell=GRUCell_zoneout(
+                        units=units,
+                        kernel_regularizer=reg(self.lambda_reg),
+                        bias_regularizer=reg(self.lambda_reg),
+                        zoneout_rate=self.zoneout_rate
+                    ),
+                    return_sequences=True,
+                    stateful=self.stateful,
+                    batch_size=self.batch_size,
                 ) for units in self.rnn_layers_units
             ]
             
-            self.hidden_states_list = [learnable_state(hidden_shape=units, b_regularizer=reg(self.lambda_reg)) for units in self.rnn_layers_units]
+            if self.use_learnable_state == True:
+                self.hidden_states_list = [
+                    learnable_state(
+                        hidden_shape=units,
+                        b_regularizer=reg(self.lambda_reg)
+                    ) for units in self.rnn_layers_units
+                ]
 
             self.dense = [
                 layers.Dense(
@@ -183,11 +226,24 @@ class RNN_GRU(Model):
                 ) for i in range(len(self.dense_layer_act_func))
             ]
         else:
-            self.rnn_cells_list = [
-                layers.GRUCell(units=units) for units in self.rnn_layers_units
+            self.rnn_list = [
+                layers.RNN(
+                    GRUCell_zoneout(
+                        units=units,
+                        zoneout_rate=self.zoneout_rate
+                    ),
+                    return_sequences=True,
+                    stateful=self.stateful,
+                    batch_size=self.batch_size,
+                ) for units in self.rnn_layers_units
             ]
-            
-            self.hidden_states_list = [learnable_state(hidden_shape=units) for units in self.rnn_layers_units]
+
+            if self.use_learnable_state == True:
+                self.hidden_states_list = [
+                    learnable_state(
+                        hidden_shape=units
+                    ) for units in self.rnn_layers_units
+                ]
 
             self.dense = [
                 layers.Dense(
@@ -197,89 +253,89 @@ class RNN_GRU(Model):
                 ) for i in range(len(self.dense_layer_act_func))
             ]
 
+        self.scalar_multiplier_pre_list = [
+            tf.Variable(
+                initial_value=1.0,
+                dtype='float32',
+                trainable=True,
+            ) for i in range(self.num_skip_connections)
+        ]
+
+        self.init_state = [None]*len(self.rnn_layers_units)
+        if self.use_learnable_state == True:
+            x_in = tf.ones(
+                shape=(self.batch_size, 1, self.data_dim),
+                dtype='float32'
+            )
+            for i in range(len(self.rnn_layers_units)):
+                self.init_state[i] = [self.hidden_states_list[i](x_in)]
+                x_in = tf.ones(
+                    shape=(self.batch_size, 1, self.rnn_layers_units[i]),
+                    dtype='float32'
+                )
 
         ### initializing weights
-        temp = tf.ones(shape=[1, 1, self.data_dim])
-        temp = self.predict(temp)
+        # temp = tf.ones(shape=[self.batch_size, 1, self.data_dim])
+        # temp = self.predict(temp)
 
         return
 
-    @tf.function
+    # @tf.function
     def call(self, inputs, training=None):
 
         # inputs shape : (None, time_steps, data_dim)
         out_steps = inputs.shape[1]
 
-        predictions_list = []
         intermediate_outputs_lst = []
-        
-        ### Initialize the GRU state.
-        states_list = []
-        # first step
-        x = inputs[:, 0, :]
-        x = x + self.noise_gen(shape=tf.shape(x), **self.noise_kwargs)
-        state1 = self.hidden_states_list[0](x, training=training)
-        prediction, *states = self.rnn_cells_list[0](
+        scalar_multiplier_list = []
+
+        # computing the scalar multipliers
+        sum_ = 0.0
+        for i in range(self.num_skip_connections):
+            sum_ += tf.math.exp(self.scalar_multiplier_pre_list[i])
+        for i in range(self.num_skip_connections):
+            scalar_multiplier_list.append(
+                tf.math.exp(self.scalar_multiplier_pre_list[i]) / sum_
+            )
+
+        ### Passing input through the GRU layers
+        # first layer
+        x = inputs
+        if training == True:
+            x = x + self.noise_gen(shape=tf.shape(x), **self.noise_kwargs)
+        # init_state_j = self.init_state[0]
+        x = self.rnn_list[0](
             x,
-            states=state1,
+            # initial_state=init_state_j,
             training=training,
         )
-        states_list.append(states[0])
-        intermediate_outputs_lst.append(prediction)
-        x = prediction
+        intermediate_outputs_lst.append(x)
+        # if self.stateful == True:
+        #     self.init_state[0] = None # so that future batches don't use the initial state
+
+        # remaining layers
         for j in range(1, self.num_rnn_layers):
-            state1 = self.hidden_states_list[j](x, training=training)
-            prediction, *states = self.rnn_cells_list[j](
+            # init_state_j = self.init_state[j]
+            prediction = self.rnn_list[j](
                 x,
-                states=state1,
+                # initial_state=init_state_j,
                 training=training,
             )
-            states_list.append(states[0])
             intermediate_outputs_lst.append(prediction)
             x = intermediate_outputs_lst[0] + prediction
-        x = intermediate_outputs_lst[0]
+            # if self.stateful == True:
+            #    self.init_state[j] = None # so that future batches don't use the initial state
+        
+        # doing the final weighted sum of the intermediate predictions
+        output = intermediate_outputs_lst[0]
         for j in range(self.num_skip_connections):
-            x = x + self.final_scalar_multipliers(intermediate_outputs_lst[j+1], idx=j)
+            output = output + scalar_multiplier_list[j]*intermediate_outputs_lst[j+1]
+        
+        # running through the final dense layers
         for j in range(len(self.dense_layer_act_func)):
-            prediction = self.dense[j](prediction, training=training)
-        predictions_list.append(prediction)
+            output = layers.TimeDistributed(self.dense[j])(output, training=training)
 
-        ### Remaining number of time-steps
-        for i in range(1, out_steps):
-            x = inputs[:, i, :]
-            x = x + self.noise_gen(shape=tf.shape(x), **self.noise_kwargs)
-            state1 = states_list[0]
-            prediction, *states = self.rnn_cells_list[j](
-                x,
-                states=state1,
-                training=training,
-            )
-            states_list[0] = states[0]
-            intermediate_outputs_lst[0] = prediction
-            x = prediction
-            for j in range(1, self.num_rnn_layers):
-                state1 = states_list[0]
-                prediction, *states = self.rnn_cells_list[j](
-                    x,
-                    states=state1,
-                    training=training,
-                )
-                states_list[j] = states[0]
-                intermediate_outputs_lst[j] = prediction
-                x = intermediate_outputs_lst[0] + prediction
-            x = intermediate_outputs_lst[0]
-            for j in range(self.num_skip_connections):
-                x = x + self.final_scalar_multipliers(intermediate_outputs_lst[j+1], idx=j)
-            for j in range(len(self.dense_layer_act_func)):
-                prediction = self.dense[j](prediction, training=training)
-            predictions_list.append(prediction)
-
-        # predictions_list.shape => (time, batch, features)
-        predictions = tf.stack(predictions_list)
-        # predictions.shape => (batch, time, features)
-        predictions = tf.transpose(predictions, [1, 0, 2])
-
-        return predictions
+        return output
 
 
     def save_model_weights(self, file_name, H5=True):
@@ -308,6 +364,8 @@ class RNN_GRU(Model):
             'noise_type':self.noise_type,
             'module':self.__module__,
             'dense_dim':list(self.dense_dim),
+            'use_learnable_state':self.use_learnable_state,
+            'stateful':self.stateful,
         }
         with open(file_name, 'w') as f:
             f.write(str(class_dict))
