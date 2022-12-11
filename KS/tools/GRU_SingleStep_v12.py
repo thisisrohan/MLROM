@@ -40,6 +40,7 @@ from tensorflow.keras import layers, losses, Input
 from tensorflow.keras.models import Model
 from tensorflow.keras import backend as K
 from tensorflow.keras.regularizers import L2
+from keras.engine import data_adapter
 
 ################################################################################
 #################################### LSTM V4 ###################################
@@ -358,7 +359,7 @@ class RNN_GRU(Model):
         return  x, state_list
 
     # @tf.function
-    def call(self, inputs, training=None):
+    def call(self, inputs, training=None, training_2=False):
 
         # inputs shape : (None, time_steps, data_dim)
         out_steps = inputs.shape[1]
@@ -383,7 +384,7 @@ class RNN_GRU(Model):
         ### Passing input through the GRU layers
         # first layer
         x = inputs
-        if training == True:
+        if training == True or training_2 == True:
             x = x + self.noise_gen(shape=tf.shape(x), **self.noise_kwargs)
         # init_state_j = self.init_state[0]
         x = self.rnn_list[0](
@@ -425,15 +426,17 @@ class RNN_GRU(Model):
         # x, y = data
         x, y, sample_weight = data_adapter.unpack_x_y_sample_weight(data)
         
-        num_timesteps = x.shape[-1]
+        num_timesteps = x.shape[-2]
         tbatch_len = self.k3+self.k1-1
         num_tbatches = num_timesteps // tbatch_len
         num_leftover_tsteps = num_timesteps % tbatch_len
         num_tsteps_warmup = self.k3 - self.k2
 
+        metrics = 0.0
         for tbatch_idx in range(num_tbatches):
             xbegin_idx = tbatch_idx*tbatch_len
-            _ = self.call(x[:, xbegin_idx:xbegin_idx+num_tsteps_warmup, :], training=False)
+            if num_tsteps_warmup > 0:
+                _ = self.call(x[:, xbegin_idx:xbegin_idx+num_tsteps_warmup, :], training=False, training_2=True)
             ytrue = y[:, xbegin_idx+self.k3-1:xbegin_idx+tbatch_len, :]
             with tf.GradientTape() as tape:
                 ypred = self.call(x[:, xbegin_idx+num_tsteps_warmup:xbegin_idx+self.k2+self.k1-1, :], training=True)
@@ -451,11 +454,16 @@ class RNN_GRU(Model):
             
             self.optimizer.apply_gradients(zip(gradients, trainable_vars))
             
-            metrics = self.compute_metrics(x[:, xbegin_idx+num_tsteps_warmup:xbegin_idx+self.k2+self.k1-1, :], ytrue, ypred, sample_weight)
+            tbatch_metrics = self.compute_metrics(x[:, xbegin_idx+num_tsteps_warmup:xbegin_idx+self.k2+self.k1-1, :], ytrue, ypred, sample_weight)
+            if tbatch_idx == 0:
+                metrics = tbatch_metrics
+            else:
+                for key in tbatch_metrics.keys():
+                    metrics[key] = (tbatch_idx*metrics[key] + tbatch_metrics[key])/(tbatch_idx+1)
 
         if num_leftover_tsteps > 0:
             # just to maintain the stateful property
-            _ = self.call(x[:, -num_leftover_tsteps:, :], training=False)
+            _ = self.call(x[:, -num_leftover_tsteps:, :], training=False, training_2=True)
 
         return metrics
         
@@ -490,6 +498,9 @@ class RNN_GRU(Model):
             'stateful':self.stateful,
             'scalar_weights':self.scalar_weights,
             'use_weights_post_dense':self.use_weights_post_dense,
+            'k1':self.k1,
+            'k2':self.k2,
+            'k3':self.k3,
         }
         with open(file_name, 'w') as f:
             f.write(str(class_dict))

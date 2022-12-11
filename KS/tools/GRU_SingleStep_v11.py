@@ -238,7 +238,7 @@ class RNN_GRU(Model):
                 ),
                 return_sequences=True,
                 stateful=self.stateful,
-                batch_size=self.batch_size,
+                batch_size=self.batch_size if self.stateful else None,
             )
         ]
         if self.num_skip_connections > 0:
@@ -253,7 +253,7 @@ class RNN_GRU(Model):
                     self.RK_RNNCell,
                     return_sequences=True,
                     stateful=self.stateful,
-                    batch_size=self.batch_size,
+                    batch_size=self.batch_size if self.stateful else None,
                 ) for i in range(self.num_skip_connections)
             ])
         
