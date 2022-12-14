@@ -2,7 +2,7 @@
 # RK Methods inspired residual GRU with skip connections, with uniform/normal  #
 # noise added to every input and learnable initial states. [STATEFUL]          #
 # This has the BPTT implemented as described in one of Pathaks, Vlachas,       #
-# et. al.'s (2018?) paper.                                                     #
+# et. al.'s (2018?) paper, and the covariance loss.                            #
 #------------------------------------------------------------------------------#
 #                        Basic Network Architecture                            #
 #------------------------------------------------------------------------------#
@@ -146,7 +146,9 @@ class RNN_GRU(Model):
             use_weights_post_dense=False,
             k1=2,
             k2=2,
-            k3=3,):
+            k3=3,
+            covmatloss_lmda=0.0,
+            ae_net=None,):
         
         super(RNN_GRU, self).__init__()
 
@@ -170,6 +172,10 @@ class RNN_GRU(Model):
         self.k1 = k1
         self.k2 = k2
         self.k3 = k3
+        self.covmatloss_lmda = covmatloss_lmda
+        self.ae_net = ae_net
+        if self.ae_net is not None:
+            self.ae_net.trainable = False
         if self.load_file is not None:
             with open(load_file, 'r') as f:
                 lines = f.readlines()
@@ -210,6 +216,8 @@ class RNN_GRU(Model):
                 self.k2 = load_dict['k2']
             if 'k3' in load_dict.keys():
                 self.k3 = load_dict['k3']
+            if 'covmatloss_lmda' in load_dict.keys():
+                self.covmatloss_lmda = load_dict['covmatloss_lmda']
         self.num_rnn_layers = len(self.rnn_layers_units)
 
 
@@ -359,7 +367,7 @@ class RNN_GRU(Model):
         return  x, state_list
 
     # @tf.function
-    def call(self, inputs, training=None, training_2=False):
+    def call(self, inputs, training=None, usenoiseflag=False):
 
         # inputs shape : (None, time_steps, data_dim)
         out_steps = inputs.shape[1]
@@ -384,7 +392,7 @@ class RNN_GRU(Model):
         ### Passing input through the GRU layers
         # first layer
         x = inputs
-        if training == True or training_2 == True:
+        if training == True or usenoiseflag == True:
             x = x + self.noise_gen(shape=tf.shape(x), **self.noise_kwargs)
         # init_state_j = self.init_state[0]
         x = self.rnn_list[0](
@@ -436,10 +444,10 @@ class RNN_GRU(Model):
         for tbatch_idx in range(num_tbatches):
             xbegin_idx = tbatch_idx*tbatch_len
             if num_tsteps_warmup > 0:
-                _ = self.call(x[:, xbegin_idx:xbegin_idx+num_tsteps_warmup, :], training=False, training_2=True)
+                _ = self.call(x[:, xbegin_idx:xbegin_idx+num_tsteps_warmup, :], training=False, usenoiseflag=True)
             ytrue = y[:, xbegin_idx+self.k3-1:xbegin_idx+tbatch_len, :]
             with tf.GradientTape() as tape:
-                ypred = self.call(x[:, xbegin_idx+num_tsteps_warmup:xbegin_idx+self.k2+self.k1-1, :], training=True)
+                ypred = self.call(x[:, xbegin_idx+num_tsteps_warmup:xbegin_idx+self.k2+self.k1-1, :], training=True, usenoiseflag=True)
                 ypred = ypred[:, self.k2-1:, :]
                 loss = self.compiled_loss(
                     ytrue,
@@ -447,6 +455,26 @@ class RNN_GRU(Model):
                     sample_weight,
                     regularization_losses=self.losses
                 )
+                if self.covmatloss_lmda != 0.0:
+                    ypred_decoded = self.rnn_normalization_layer(ypred)
+                    ypred_decoded = layers.TimeDistributed(self.ae_net.decoder_net)(ypred_decoded, training=False)
+                    ypred_decoded = self.ae_normalization_layer(ypred_decoded)
+
+                    ytrue_decoded = self.rnn_normalization_layer(y)
+                    ytrue_decoded = layers.TimeDistributed(self.ae_net.decoder_net)(ytrue_decoded, training=False)
+                    ytrue_decoded = self.ae_normalization_layer(ytrue_decoded)
+                    
+                    covmat_pred = tf.linalg.matmul(
+                        ypred_decoded,
+                        ypred_decoded,
+                        transpose_a=True,
+                    )
+                    covmat_true = tf.linalg.matmul(
+                        ytrue_decoded,
+                        ytrue_decoded,
+                        transpose_a=True,
+                    )
+                    covmat_fro_loss = self.covmat_lmda * sw_cov * tf.norm(covmat_true - covmat_pred, ord='fro', axis=[-2, -1])
             self._validate_target_and_loss(ypred, loss)
 
             trainable_vars = self.trainable_variables

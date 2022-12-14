@@ -201,8 +201,8 @@ class AR_RNN_GRU(Model):
                 self.use_learnable_state = load_dict['use_learnable_state']
             if 'zoneout_rate' in load_dict.keys():
                 self.zoneout_rate = load_dict['zoneout_rate']
-            if 'stateful' in load_dict.keys():
-                self.stateful = load_dict['stateful']
+            # if 'stateful' in load_dict.keys():
+            #     self.stateful = load_dict['stateful']
             if 'scalar_weights' in load_dict.keys():
                 self.scalar_weights = load_dict['scalar_weights']
             if 'use_weights_post_dense' in load_dict.keys():
@@ -313,27 +313,28 @@ class AR_RNN_GRU(Model):
                 single_weights(w_regularizer=reg(self.lambda_reg))
             )
 
-        if type(self.scalar_weights) == type(None):
-            self.scalar_multiplier_pre_list = []
-            for i in range(self.num_skip_connections):
-                for j in range(i+1):
-                    self.scalar_multiplier_pre_list.append(
-                        tf.Variable(
-                            initial_value=1.0,
-                            dtype='float32',
-                            trainable=True,
-                            name='a_{}{}'.format(j+1, i+1) # this naming convention follows the one in the diagram at the top of this script
+        if self.num_skip_connections > 0:
+            if type(self.scalar_weights) == type(None):
+                self.scalar_multiplier_pre_list = []
+                for i in range(self.num_skip_connections):
+                    for j in range(i+1):
+                        self.scalar_multiplier_pre_list.append(
+                            tf.Variable(
+                                initial_value=1.0,
+                                dtype='float32',
+                                trainable=True,
+                                name='a_{}{}'.format(j+1, i+1) # this naming convention follows the one in the diagram at the top of this script
+                            )
                         )
-                    )
-            # self.scalar_multiplier_pre_list = [
-            #     tf.Variable(
-            #         initial_value=1.0,
-            #         dtype='float32',
-            #         trainable=True,
-            #     ) for i in range(int(0.5*self.num_skip_connections*(self.num_skip_connections+1)))
-            # ]
-        else:
-            self.scalar_weights = np.array(self.scalar_weights, dtype='float32')
+                # self.scalar_multiplier_pre_list = [
+                #     tf.Variable(
+                #         initial_value=1.0,
+                #         dtype='float32',
+                #         trainable=True,
+                #     ) for i in range(int(0.5*self.num_skip_connections*(self.num_skip_connections+1)))
+                # ]
+            else:
+                self.scalar_weights = np.array(self.scalar_weights, dtype='float32')
 
         self.init_state = [None]*len(self.rnn_layers_units)
         # self.init_state = []
