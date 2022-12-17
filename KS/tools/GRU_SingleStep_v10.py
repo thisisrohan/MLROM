@@ -58,6 +58,23 @@ class uniform_noise(layers.Layer):
         x = x + tf.random.uniform(shape=tf.shape(x), minval=self.mean-1.732051*self.stddev, maxval=self.mean+1.732051*self.stddev)
         return x
 
+class single_weights(layers.Layer):
+    def __init__(self, w_regularizer=None, **kwargs):
+        super(single_weights, self).__init__()
+        self._weights_regularizer = w_regularizer
+        
+    def build(self, input_shape):
+        self.individual_weights = self.add_weight(
+            name='individual_weights',
+            shape=[input_shape[-1]],
+            initializer=tf.keras.initializers.RandomNormal(mean=1.0, stddev=0.33),
+            regularizer=self._weights_regularizer,
+            trainable=True
+        )
+
+    def call(self, x):
+        return x * self.individual_weights
+
 class GRUCell_zoneout(layers.GRUCell):
     def __init__(self, **kwargs):
         self.zoneout_rate = kwargs.pop('zoneout_rate', 0.0)
@@ -107,7 +124,11 @@ class RNN_GRU(Model):
             use_learnable_state=True,
             stateful=False,
             zoneout_rate=0.0,
-            batch_size=1):
+            rnncell_dropout_rate=0.0,
+            denselayer_dropout_rate=0.0,
+            batch_size=1,
+            use_weights_post_dense=False,
+            **kwargs):
         
         super(RNN_GRU, self).__init__()
 
@@ -126,6 +147,9 @@ class RNN_GRU(Model):
         self.batch_size = batch_size
         self.stateful = stateful # ideally do not use `stateful`=True and `use_learnable_state`=True at the same time.
         self.zoneout_rate = zoneout_rate
+        self.rnncell_dropout_rate = rnncell_dropout_rate
+        self.denselayer_dropout_rate = denselayer_dropout_rate
+        self.use_weights_post_dense = use_weights_post_dense
         if self.load_file is not None:
             with open(load_file, 'r') as f:
                 lines = f.readlines()
@@ -156,7 +180,17 @@ class RNN_GRU(Model):
                 self.zoneout_rate = load_dict['zoneout_rate']
             if 'stateful' in load_dict.keys():
                 self.stateful = load_dict['stateful']
+            if 'use_weights_post_dense' in load_dict.keys():
+                self.use_weights_post_dense = load_dict['use_weights_post_dense']
+            if 'denselayer_dropout_rate' in load_dict.keys():
+                self.denselayer_dropout_rate = load_dict['denselayer_dropout_rate']
+            if 'rnncell_dropout_rate' in load_dict.keys():
+                self.rnncell_dropout_rate = load_dict['rnncell_dropout_rate']
         self.num_rnn_layers = len(self.rnn_layers_units)
+
+        self.zoneout_rate = min(1.0, max(0.0, self.zoneout_rate))
+        self.denselayer_dropout_rate = min(1.0, max(0.0, self.denselayer_dropout_rate))
+        self.rnncell_dropout_rate = min(1.0, max(0.0, self.rnncell_dropout_rate))
 
         if isinstance(self.dense_layer_act_func, list) == False:
             self.dense_layer_act_func = [self.dense_layer_act_func]
@@ -183,66 +217,57 @@ class RNN_GRU(Model):
 
         ### the GRU network
         self.hidden_states_list = []
+        reg = lambda x:None
+        use_reg = False
         if self.reg_name != None and self.lambda_reg != None and self.lambda_reg != 0:
             reg = eval('tf.keras.regularizers.'+self.reg_name)
-            self.rnn_list = [
-                layers.RNN(
-                    cell=GRUCell_zoneout(
-                        units=units,
-                        kernel_regularizer=reg(self.lambda_reg),
-                        bias_regularizer=reg(self.lambda_reg),
-                        zoneout_rate=self.zoneout_rate
-                    ),
-                    return_sequences=True,
-                    stateful=self.stateful,
-                    batch_size=self.batch_size,
-                ) for units in self.rnn_layers_units
-            ]
-            
-            if self.use_learnable_state == True:
-                self.hidden_states_list = [
-                    learnable_state(
-                        hidden_shape=units,
-                        b_regularizer=reg(self.lambda_reg)
-                    ) for units in self.rnn_layers_units
-                ]
-
-            self.dense = [
-                layers.Dense(
-                    self.dense_dim[i],
-                    activation=self.dense_layer_act_func[i],
-                    # kernel_initializer=tf.initializers.zeros(),
+            use_reg = True
+        self.rnn_list = [
+            layers.RNN(
+                cell=GRUCell_zoneout(
+                    units=units,
                     kernel_regularizer=reg(self.lambda_reg),
-                    bias_regularizer=reg(self.lambda_reg)
-                ) for i in range(len(self.dense_layer_act_func))
-            ]
-        else:
-            self.rnn_list = [
-                layers.RNN(
-                    GRUCell_zoneout(
-                        units=units,
-                        zoneout_rate=self.zoneout_rate
-                    ),
-                    return_sequences=True,
-                    stateful=self.stateful,
-                    batch_size=self.batch_size,
+                    bias_regularizer=reg(self.lambda_reg),
+                    zoneout_rate=self.zoneout_rate,
+                    dropout=self.rnncell_dropout_rate,
+                ),
+                return_sequences=True,
+                stateful=self.stateful,
+                batch_size=self.batch_size if self.stateful else None,
+            ) for units in self.rnn_layers_units
+        ]
+        
+        if self.use_learnable_state == True:
+            self.hidden_states_list = [
+                learnable_state(
+                    hidden_shape=units,
+                    b_regularizer=reg(self.lambda_reg)
                 ) for units in self.rnn_layers_units
             ]
 
-            if self.use_learnable_state == True:
-                self.hidden_states_list = [
-                    learnable_state(
-                        hidden_shape=units
-                    ) for units in self.rnn_layers_units
-                ]
-
-            self.dense = [
-                layers.Dense(
-                    self.dense_dim[i],
-                    activation=self.dense_layer_act_func[i],
-                    # kernel_initializer=tf.initializers.zeros(),
-                ) for i in range(len(self.dense_layer_act_func))
+        self.dense = [
+            layers.Dense(
+                self.dense_dim[i],
+                activation=self.dense_layer_act_func[i],
+                # kernel_initializer=tf.initializers.zeros(),
+                kernel_regularizer=reg(self.lambda_reg),
+                bias_regularizer=reg(self.lambda_reg)
+            ) for i in range(len(self.dense_layer_act_func))
+        ]
+        
+        self.dense_dropout = []
+        if self.denselayer_dropout_rate > 0.0:
+            self.dense_dropout = [
+                layers.Dropout(
+                    self.denselayer_dropout_rate
+                ) for i in range(len(self.dense))
             ]
+
+        if self.use_weights_post_dense == True:
+            self.dense.append(
+                single_weights(w_regularizer=reg(self.lambda_reg))
+            )
+        
 
         self.init_state = [None]*len(self.rnn_layers_units)
         if self.use_learnable_state == True:
@@ -299,7 +324,13 @@ class RNN_GRU(Model):
         output = x
         # running through the final dense layers
         for j in range(len(self.dense_layer_act_func)):
+            if self.denselayer_dropout_rate > 0.0:
+                output = self.dense_dropout[j](output, training=training)
             output = layers.TimeDistributed(self.dense[j])(output, training=training)
+    
+        if self.use_weights_post_dense == True:
+            output = layers.TimeDistributed(self.dense[-1])(output, training=training)
+
 
         return output
 
@@ -332,6 +363,10 @@ class RNN_GRU(Model):
             'dense_dim':list(self.dense_dim),
             'use_learnable_state':self.use_learnable_state,
             'stateful':self.stateful,
+            'zoneout_rate':self.zoneout_rate,
+            'rnncell_dropout_rate':self.rnncell_dropout_rate,
+            'denselayer_dropout_rate':self.denselayer_dropout_rate,
+            'use_weights_post_dense':self.use_weights_post_dense,
         }
         with open(file_name, 'w') as f:
             f.write(str(class_dict))

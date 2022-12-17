@@ -1,5 +1,6 @@
 ################################################################################
-# Deep denoising contractive autoencoder                                       #
+# Deep denoising contractive autoencoder.                                      #
+# Uses a single weights layer at the end.                                      #
 ################################################################################
 
 import numpy as np
@@ -12,6 +13,24 @@ from tensorflow.keras.regularizers import L2
 from keras.engine import data_adapter
 
 ################################################################################
+
+class single_weights(layers.Layer):
+    def __init__(self, w_regularizer=None, **kwargs):
+        super(single_weights, self).__init__()
+        self._weights_regularizer = w_regularizer
+        
+    def build(self, input_shape):
+        self.individual_weights = self.add_weight(
+            name='individual_weights',
+            shape=[input_shape[-1]],
+            initializer=tf.keras.initializers.RandomNormal(mean=1.0, stddev=0.33),
+            regularizer=self._weights_regularizer,
+            trainable=True
+        )
+
+    def call(self, x):
+        return x * self.individual_weights
+
 
 class Autoencoder(Model):
     """
@@ -31,6 +50,9 @@ class Autoencoder(Model):
             load_file=None,
             stddev=0.0,
             contractive_lmda=1.0,
+            use_weights_post_dense=False,
+            dropout_rate=0.0,
+            **kwargs,
         ):
         
         super(Autoencoder, self).__init__()
@@ -38,20 +60,19 @@ class Autoencoder(Model):
         self.stddev = stddev
         self.contractive_lmda = contractive_lmda
         self.load_file = load_file
-        if load_file == None:
-            self.data_dim=data_dim
-            self.enc_layers=enc_layers
-            self.dec_layers=dec_layers
-            self.latent_space_dim=latent_space_dim
-            self.lambda_reg=lambda_reg
-            self.reg_name=reg_name
-            self.enc_layer_act_func=enc_layer_act_func
-            self.enc_final_layer_act_func=enc_final_layer_act_func
-            self.dec_layer_act_func=dec_layer_act_func
-            self.dec_final_layer_act_func=dec_final_layer_act_func
-            # self.tf_version = tf.__version__
-            # self.compile_options=None
-        else:
+        self.data_dim = data_dim
+        self.enc_layers = enc_layers
+        self.dec_layers = dec_layers
+        self.latent_space_dim = latent_space_dim
+        self.lambda_reg = lambda_reg
+        self.reg_name = reg_name
+        self.enc_layer_act_func = enc_layer_act_func
+        self.enc_final_layer_act_func = enc_final_layer_act_func
+        self.dec_layer_act_func = dec_layer_act_func
+        self.dec_final_layer_act_func = dec_final_layer_act_func
+        self.use_weights_post_dense = use_weights_post_dense
+        self.dropout_rate = dropout_rate
+        if self.load_file is not None:
             with open(load_file, 'r') as f:
                 lines = f.readlines()
             load_dict = eval(lines[0])
@@ -59,114 +80,123 @@ class Autoencoder(Model):
             # for line in lines:
             #     load_dict += line
             # load_dict = eval(load_dict)
-            self.data_dim=load_dict['data_dim']
-            self.enc_layers=load_dict['enc_layers']
-            self.dec_layers=load_dict['dec_layers']
-            self.latent_space_dim=load_dict['latent_space_dim']
-            self.lambda_reg=load_dict['lambda_reg']
-            self.reg_name=load_dict['reg_name']
-            self.enc_layer_act_func=load_dict['enc_layer_act_func']
-            self.enc_final_layer_act_func=load_dict['enc_final_layer_act_func']
-            self.dec_layer_act_func=load_dict['dec_layer_act_func']
-            self.dec_final_layer_act_func=load_dict['dec_final_layer_act_func']
-            try:
+            if 'data_dim' in load_dict.keys():
+                self.data_dim=load_dict['data_dim']
+            if 'enc_layers' in load_dict.keys():
+                self.enc_layers=load_dict['enc_layers']
+            if 'dec_layers' in load_dict.keys():
+                self.dec_layers=load_dict['dec_layers']
+            if 'latent_space_dim' in load_dict.keys():
+                self.latent_space_dim=load_dict['latent_space_dim']
+            if 'lambda_reg' in load_dict.keys():
+                self.lambda_reg=load_dict['lambda_reg']
+            if 'reg_name' in load_dict.keys():
+                self.reg_name=load_dict['reg_name']
+            if 'enc_layer_act_func' in load_dict.keys():
+                self.enc_layer_act_func=load_dict['enc_layer_act_func']
+            if 'enc_final_layer_act_func' in load_dict.keys():
+                self.enc_final_layer_act_func=load_dict['enc_final_layer_act_func']
+            if 'dec_layer_act_func' in load_dict.keys():
+                self.dec_layer_act_func=load_dict['dec_layer_act_func']
+            if 'dec_final_layer_act_func' in load_dict.keys():
+                self.dec_final_layer_act_func=load_dict['dec_final_layer_act_func']
+            if 'stddev' in load_dict.keys():
                 self.stddev = load_dict['stddev']
-            except:
-                pass
-            try:
+            if 'contractive_lmda' in load_dict.keys():
                 self.contractive_lmda = load_dict['contractive_lmda']
-            except:
-                pass
+            if 'use_weights_post_dense' in load_dict.keys():
+                self.use_weights_post_dense = load_dict['use_weights_post_dense']
+            if 'dropout_rate' in load_dict.keys():
+                self.dropout_rate = load_dict['dropout_rate']
 
+        self.dropout_rate = min(1.0, max(0.0, self.dropout_rate))
 
         ### input vector
         input_shape = (self.data_dim,)
         input_vec = Input(shape=input_shape)
 
-
+        reg = lambda x:None
+        use_reg = False
+        if self.reg_name != None and self.lambda_reg != None and self.lambda_reg != 0:
+            reg = eval('tf.keras.regularizers.'+self.reg_name)
+            use_reg = True
 
         ### the encoder network
         self.noise_layer = layers.GaussianNoise(stddev=self.stddev)
-        if self.reg_name is not None and self.lambda_reg is not None and self.lambda_reg != 0:
-            reg = eval('tf.keras.regularizers.'+self.reg_name)
-            encoder_layers_list = [
-                layers.Dense(
-                    neurons,
-                    activation=self.enc_layer_act_func,
-                    kernel_regularizer=reg(self.lambda_reg),
-                    bias_regularizer=reg(self.lambda_reg)
-                ) for neurons in self.enc_layers
-            ]
-            encoder_layers_list.append(
-                layers.Dense(
-                    self.latent_space_dim,
-                    activation=self.enc_final_layer_act_func,
-                    kernel_regularizer=reg(self.lambda_reg),
-                    bias_regularizer=reg(self.lambda_reg)
-                )
-            )
+
+        if self.enc_layer_act_func == 'modified_relu':
+            a = 1 - np.exp(-1)
+            enc_layer_activation = lambda x:tf.keras.activations.relu(x+a)-a
         else:
-            encoder_layers_list = [
-                layers.Dense(
-                    neurons,
-                    activation=self.enc_layer_act_func
-                ) for neurons in self.enc_layers
-            ]
-            encoder_layers_list.append(
-                layers.Dense(
-                    self.latent_space_dim,
-                    activation=self.enc_final_layer_act_func,
-                )
+            enc_layer_activation = self.enc_layer_act_func
+
+        encoder_layers_list = [
+            layers.Dense(
+                neurons,
+                activation=enc_layer_activation,
+                kernel_regularizer=reg(self.lambda_reg),
+                bias_regularizer=reg(self.lambda_reg)
+            ) for neurons in self.enc_layers
+        ]
+        encoder_layers_list.append(
+            layers.Dense(
+                self.latent_space_dim,
+                activation=self.enc_final_layer_act_func,
+                kernel_regularizer=reg(self.lambda_reg),
+                bias_regularizer=reg(self.lambda_reg)
             )
+        )
 
 
         x = self.noise_layer(input_vec)
         x = encoder_layers_list[0](x)
-        for i in range(1, len(encoder_layers_list)-1):
+        for i in range(1, len(encoder_layers_list)):
+            if self.dropout_rate > 0.0:
+                x = layers.Dropout(self.dropout_rate)(x)
             x = encoder_layers_list[i](x)
-        encoded_vec = encoder_layers_list[-1](x)
+        encoded_vec = x
 
         self.encoder_layers_list = encoder_layers_list
         self.encoder_net = Model(inputs=input_vec, outputs=encoded_vec)
 
         ### the decoder network
-        if self.reg_name is not None and self.lambda_reg is not None and self.lambda_reg != 0:
-            decoder_layers_list = [
-                layers.Dense(
-                    neurons,
-                    activation=self.dec_layer_act_func,
-                    kernel_regularizer=reg(self.lambda_reg),
-                    bias_regularizer=reg(self.lambda_reg)
-                ) for neurons in self.dec_layers
-            ]
-            decoder_layers_list.append(
-                layers.Dense(
-                    data_dim,
-                    activation=self.dec_final_layer_act_func,
-                    kernel_regularizer=reg(self.lambda_reg),
-                    bias_regularizer=reg(self.lambda_reg)
-                )
-            )
+        if self.dec_layer_act_func == 'modified_relu':
+            dec_layer_activation = lambda x:tf.keras.activations.relu(x+a)-a
         else:
-            decoder_layers_list = [
-                layers.Dense(
-                    neurons,
-                    activation=self.dec_layer_act_func,
-                ) for neurons in self.dec_layers
-            ]
-            decoder_layers_list.append(
-                layers.Dense(
-                    data_dim,
-                    activation=self.dec_final_layer_act_func,
-                )
+            dec_layer_activation = self.dec_layer_act_func
+
+        decoder_layers_list = [
+            layers.Dense(
+                neurons,
+                activation=dec_layer_activation,
+                kernel_regularizer=reg(self.lambda_reg),
+                bias_regularizer=reg(self.lambda_reg)
+            ) for neurons in self.dec_layers
+        ]
+        decoder_layers_list.append(
+            layers.Dense(
+                data_dim,
+                activation=self.dec_final_layer_act_func,
+                kernel_regularizer=reg(self.lambda_reg),
+                bias_regularizer=reg(self.lambda_reg)
             )
+        )
 
         
         encoded_input_vec = Input(shape=encoded_vec.shape[-1],)
         x = decoder_layers_list[0](encoded_input_vec)
-        for i in range(1, len(decoder_layers_list)-1):
+        for i in range(1, len(decoder_layers_list)):
+            if self.dropout_rate > 0.0:
+                x = layers.Dropout(self.dropout_rate)(x)
             x = decoder_layers_list[i](x)
-        decoded_vec = decoder_layers_list[-1](x)
+        
+        if self.use_weights_post_dense == True:
+            decoder_layers_list.append(
+                single_weights(w_regularizer=reg(self.lambda_reg))
+            )
+            x = decoder_layers_list[-1](x)
+
+        decoded_vec = x
 
         self.decoder_layers_list = decoder_layers_list
         self.decoder_net = Model(inputs=encoded_input_vec, outputs=decoded_vec)
@@ -248,6 +278,8 @@ class Autoencoder(Model):
             'stddev':self.stddev,
             'contractive_lmda':self.contractive_lmda,
             'module':self.__module__,
+            'use_weights_post_dense':self.use_weights_post_dense,
+            'dropout_rate':self.dropout_rate,
         }
         with open(file_name, 'w') as f:
             f.write(str(class_dict))

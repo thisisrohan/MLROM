@@ -3,9 +3,33 @@ import numpy as np
 import os
 import matplotlib.pyplot as plt
 
+class NMSE(tf.keras.metrics.MeanSquaredError):
+    def __init__(self, divisor_arr, name='NMSE', **kwargs):
+        super(NMSE, self).__init__(name, **kwargs)
+        self.divisor_arr = divisor_arr
+
+    def update_state(self, y_true, y_pred, sample_weight=None):
+        y_true = y_true / self.divisor_arr
+        y_pred = y_pred / self.divisor_arr
+        return super(NMSE, self).update_state(y_true, y_pred, sample_weight)
+
+class AERNN_loss(tf.keras.losses.Loss):
+    def __init__(self, divisor_arr, loss_weights=None):
+        super(AERNN_loss, self).__init__()
+        self.divisor_arr = divisor_arr
+        self.loss_weights = loss_weights**0.5 if loss_weights is not None else loss_weights
+
+    def call(self, y_true, y_pred):
+        y_pred = y_pred / self.divisor_arr
+        y_true = y_true / self.divisor_arr
+        if isinstance(self.loss_weights, type(None)) == False:
+            y_pred = y_pred * self.loss_weights
+            y_true = y_true * self.loss_weights
+        return tf.keras.losses.MSE(y_pred, y_true)
+
 def trainAERNN(
         create_data_for_RNN,
-        ae_net,
+        Autoencoder,
         AR_RNN,
         all_data,
         AR_AERNN,
@@ -40,6 +64,8 @@ def trainAERNN(
     batch_size = kwargs['batch_size']
     load_file_rnn = kwargs['load_file_rnn']
     wt_file_rnn = kwargs['wt_file_rnn']
+    load_file_ae = kwargs['load_file_ae']
+    wt_file_ae = kwargs['wt_file_ae']
     covmat_lmda = kwargs['covmat_lmda']
     readAndReturnLossHistories = kwargs['readAndReturnLossHistories']
     mytimecallback = kwargs['mytimecallback']
@@ -49,6 +75,11 @@ def trainAERNN(
     test_split = kwargs['test_split']
     val_split = kwargs['val_split']
 
+    ### create autoencoder and load weights
+    ae_net = Autoencoder(all_data.shape[1], load_file=load_file_ae)
+    ae_net.load_weights_from_file(wt_file_ae)
+
+    ### Creating data for AE-RNN and doing some statistics
     time_mean_ogdata = np.mean(all_data, axis=0)
     time_stddev_ogdata = np.std(all_data, axis=0)
 
@@ -87,10 +118,14 @@ def trainAERNN(
     del(org_data_idx_arr_output)
     del(temp)
     
-    if loss_weights is None:
-        loss_weights = [1.0]*data_rnn_output.shape[1]
-    elif isinstance(loss_weights, list) == False:
-        loss_weights = list(loss_weights**np.arange(data_rnn_output.shape[1]))
+    # if loss_weights is None:
+    #     loss_weights = [[1.0]*data_rnn_output.shape[1]]
+    # el
+    if isinstance(loss_weights, list) == False:
+        loss_weights = np.array([loss_weights**np.arange(data_rnn_output.shape[1])])
+        loss_weights = np.tile(loss_weights, [data_rnn_output.shape[-1], 1])
+        loss_weights = np.transpose(loss_weights)
+    # print('loss_weights : ', loss_weights)
 
     ### splitting the data for train-val-test, and shuffling
     cum_samples = rnn_data_boundary_idx_arr[-1]
@@ -245,25 +280,18 @@ def trainAERNN(
         covmat_lmda,
         time_stddev_ogdata,
         time_mean_ogdata,
+        loss_weights=loss_weights,
     )
 
     AR_AERNN_net.build(input_shape=(batch_size,)+training_data_rnn_input.shape[1:])
 
-    class AERNN_loss(tf.keras.losses.Loss):
-        def __init__(self, divisor_arr):
-            super(AERNN_loss, self).__init__()
-            self.divisor_arr = divisor_arr
-
-        def call(self, y_true, y_pred):
-            return tf.keras.losses.MSE(y_pred/self.divisor_arr, y_true/self.divisor_arr)
-        
     
     AR_AERNN_net.compile(
         optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate_list[0]),
-        loss=AERNN_loss(divisor_arr=time_stddev),#_ogdata/normalization_constant_arr_aedata[1, :]),
+        loss=AERNN_loss(divisor_arr=time_stddev, loss_weights=loss_weights),#_ogdata/normalization_constant_arr_aedata[1, :]),
         run_eagerly=False,
-        loss_weights=loss_weights,
-        metrics='mse'
+        # loss_weights=loss_weights,
+        metrics=['mse', NMSE(divisor_arr=time_stddev)]
     )
     
     if behaviour == 'initialiseAndTrainFromScratch':
@@ -317,7 +345,7 @@ def trainAERNN(
             os.makedirs(dir_name_ckpt)
         checkpoint_cb = tf.keras.callbacks.ModelCheckpoint(
             filepath=dir_name_ckpt+'/checkpoint-{}_outsteps'.format(num_outsteps),#+'/checkpoint--loss={loss:.4f}--vall_loss={val_loss:.4f}',
-            monitor='val_loss',
+            monitor='val_NMSE',
             save_best_only=True,
             save_weights_only=True,
             verbose=2,
@@ -364,7 +392,7 @@ def trainAERNN(
             # savelosses_cb.update_lr_idx(i)
             
             early_stopping_cb = tf.keras.callbacks.EarlyStopping(
-                monitor='val_loss',
+                monitor='val_NMSE',
                 patience=patience_thislr,
                 restore_best_weights=True,
                 verbose=True,
@@ -396,7 +424,8 @@ def trainAERNN(
     #             validation_split=val_split/train_split,
                 validation_data=(val_data_rnn_input, val_data_rnn_output),
                 callbacks=[early_stopping_cb, timekeeper_cb, checkpoint_cb, savelosses_cb],
-                verbose=1
+                verbose=1,
+                shuffle=True,
             )
 
             val_loss_hist.extend(history.history['val_loss'])
@@ -482,5 +511,5 @@ def trainAERNN(
     del(testing_data_rnn_input)
     del(testing_data_rnn_output)
 
-    return AR_AERNN
+    return
         

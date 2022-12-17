@@ -1,6 +1,7 @@
 ################################################################################
 # RK Methods inspired residual GRU with skip connections, with uniform/normal  #
 # noise added to every input and learnable initial states. [STATEFUL]          #
+# For GRU_SingleStep_v11                                                       #
 #------------------------------------------------------------------------------#
 #                        Basic Network Architecture                            #
 #------------------------------------------------------------------------------#
@@ -147,6 +148,8 @@ class AR_RNN_GRU(Model):
             use_learnable_state=True,
             stateful=False,
             zoneout_rate=0.0,
+            rnncell_dropout_rate=0.0,
+            denselayer_dropout_rate=0.0,
             batch_size=1,
             scalar_weights=None,
             use_weights_post_dense=False,
@@ -169,6 +172,8 @@ class AR_RNN_GRU(Model):
         self.batch_size = batch_size
         self.stateful = stateful # ideally do not use `stateful`=True and `use_learnable_state`=True at the same time.
         self.zoneout_rate = zoneout_rate
+        self.rnncell_dropout_rate = rnncell_dropout_rate
+        self.denselayer_dropout_rate = denselayer_dropout_rate
         self.scalar_weights = scalar_weights
         self.use_weights_post_dense = use_weights_post_dense
         self.T_input = T_input
@@ -211,6 +216,10 @@ class AR_RNN_GRU(Model):
             #     self.T_input = load_dict['T_input']
             # if 'T_output' in load_dict.keys():
             #     self.T_output = load_dict['T_output']
+            if 'denselayer_dropout_rate' in load_dict.keys():
+                self.denselayer_dropout_rate = load_dict['denselayer_dropout_rate']
+            if 'rnncell_dropout_rate' in load_dict.keys():
+                self.rnncell_dropout_rate = load_dict['rnncell_dropout_rate']
         self.num_rnn_layers = len(self.rnn_layers_units)
 
         ### time steps
@@ -252,6 +261,10 @@ class AR_RNN_GRU(Model):
         # if self.num_skip_connections > 0:
         #    self.final_scalar_multipliers = scalar_multipliers(self.num_skip_connections)
 
+        self.zoneout_rate = min(1.0, max(0.0, self.zoneout_rate))
+        self.denselayer_dropout_rate = min(1.0, max(0.0, self.denselayer_dropout_rate))
+        self.rnncell_dropout_rate = min(1.0, max(0.0, self.rnncell_dropout_rate))
+
         ### the GRU network
         self.hidden_states_list = []
         reg = lambda x:None
@@ -265,7 +278,8 @@ class AR_RNN_GRU(Model):
                     units=self.rnn_layers_units[0],
                     kernel_regularizer=reg(self.lambda_reg),
                     bias_regularizer=reg(self.lambda_reg),
-                    zoneout_rate=self.zoneout_rate
+                    zoneout_rate=self.zoneout_rate,
+                    dropout=self.rnncell_dropout_rate,
                 ),
                 return_sequences=True,
                 return_state=True,
@@ -278,7 +292,8 @@ class AR_RNN_GRU(Model):
                 units=self.rnn_layers_units[1],
                 kernel_regularizer=reg(self.lambda_reg),
                 bias_regularizer=reg(self.lambda_reg),
-                zoneout_rate=self.zoneout_rate
+                zoneout_rate=self.zoneout_rate,
+                dropout=self.rnncell_dropout_rate,
             )
             self.rnn_list.extend([
                 layers.RNN(
@@ -307,6 +322,14 @@ class AR_RNN_GRU(Model):
                 bias_regularizer=reg(self.lambda_reg)
             ) for i in range(len(self.dense_layer_act_func))
         ]
+
+        self.dense_dropout = []
+        if self.denselayer_dropout_rate > 0.0:
+            self.dense_dropout = [
+                layers.Dropout(
+                    self.denselayer_dropout_rate
+                ) for i in range(len(self.dense_layer_act_func))
+            ]
 
         if self.use_weights_post_dense == True:
             self.dense.append(
@@ -367,13 +390,15 @@ class AR_RNN_GRU(Model):
 
     def build(self, input_shape):
         super(AR_RNN_GRU, self).build(input_shape)
-        if self.stateful == False and self.use_learnable_state == False:
-            for i in range(len(self.init_state)):
-                self.init_state[i] = [tf.zeros(shape=(input_shape[0], self.rnn_layers_units[i]), dtype='float32')]
+        # if self.stateful == False and self.use_learnable_state == False:
+        #     for i in range(len(self.init_state)):
+        #         self.init_state[i] = [tf.zeros(shape=(input_shape[0], self.rnn_layers_units[i]), dtype='float32')]
 
     # @tf.function
-    def _warmup(self, inputs, scalar_multiplier_list, training=None, usenoiseflag=False):
+    def _warmup(self, inputs, training=None, usenoiseflag=False, **kwargs):
         ### Initialize the GRU state.
+
+        scalar_multiplier_list = self.compute_scalar_multipliers()
 
         states_list = []
         intermediate_outputs_lst = []
@@ -404,17 +429,17 @@ class AR_RNN_GRU(Model):
         
         output = x[:, -1:, :]
         # running through the final dense layers
-        for j in range(len(self.dense)):
+        for j in range(len(self.dense_layer_act_func)):
+            if self.denselayer_dropout_rate > 0.0:
+                output = self.dense_dropout[j](output, training=training)
             output = layers.TimeDistributed(self.dense[j])(output, training=training)
 
-        return output, states_list, intermediate_outputs_lst
+        if self.use_weights_post_dense == True:
+            output = layers.TimeDistributed(self.dense[-1])(output, training=training)
 
-    # @tf.function
-    def call(self, inputs, training=None, usenoiseflag=False):
+        return output, states_list, intermediate_outputs_lst, scalar_multiplier_list
 
-        predictions_list = []
-
-        # computing the scalar multipliers
+    def compute_scalar_multipliers(self):
         if type(self.scalar_weights) != type(None):
             scalar_multiplier_list = self.scalar_weights #* self.dt_rnn
         else:
@@ -428,11 +453,58 @@ class AR_RNN_GRU(Model):
                     scalar_multiplier_list.append(
                         tf.math.exp(fac * self.scalar_multiplier_pre_list[int(i*(i+1)/2) + j]) / sum_ # not corrected, weights in a row need not sum to one, they sum to the fractional time step
                     )
+        return scalar_multiplier_list
+
+    def onestep(
+            self,
+            x=None,
+            training=None,
+            states_list=None,
+            intermediate_outputs_lst=None,
+            scalar_multiplier_list=None,
+            **kwargs):
+
+        x, states = self.rnn_list[0](
+            x,
+            initial_state=states_list[0],
+            training=training,
+        )
+        intermediate_outputs_lst[0] = x
+        states_list[0] = states
+
+        # remaining layers
+        for i in range(self.num_skip_connections):
+            prediction, states = self.rnn_list[i+1](
+                x,
+                initial_state=states_list[i+1],
+                training=training,
+            )
+            intermediate_outputs_lst[i+1] = prediction
+            states_list[i+1] = (states)
+            x = intermediate_outputs_lst[0]
+            for j in range(i+1):
+                x += scalar_multiplier_list[int(i*(i+1)/2) + j] * intermediate_outputs_lst[j+1]
+        
+        x = x[:, -1:, :]
+        # running through the final dense layers
+        for j in range(len(self.dense_layer_act_func)):
+            if self.denselayer_dropout_rate > 0.0:
+                x = self.dense_dropout[j](x, training=training)
+            x = layers.TimeDistributed(self.dense[j])(x, training=training)
+
+        if self.use_weights_post_dense == True:
+            x = layers.TimeDistributed(self.dense[-1])(x, training=training)
+
+        return x, states_list
+
+    # @tf.function
+    def call(self, inputs, training=None, usenoiseflag=False):
+
+        predictions_list = []
 
         ### warming up the RNN
-        x, states_list, intermediate_outputs_lst = self._warmup(
+        x, states_list, intermediate_outputs_lst, scalar_multiplier_list = self._warmup(
             inputs,
-            scalar_multiplier_list,
             training=False,
             usenoiseflag=usenoiseflag
         )
@@ -441,31 +513,44 @@ class AR_RNN_GRU(Model):
 
         ### Passing input through the GRU layers
         for tstep in range(1, self.out_steps):
-            x, states = self.rnn_list[0](
-                x,
-                initial_state=states_list[0],
-                training=training,
-            )
-            intermediate_outputs_lst[0] = x
-            states_list[0] = states
+            # x, states = self.rnn_list[0](
+            #     x,
+            #     initial_state=states_list[0],
+            #     training=training,
+            # )
+            # intermediate_outputs_lst[0] = x
+            # states_list[0] = states
 
-            # remaining layers
-            for i in range(self.num_skip_connections):
-                prediction, states = self.rnn_list[i+1](
-                    x,
-                    initial_state=states_list[i+1],
-                    training=training,
-                )
-                intermediate_outputs_lst[i+1] = prediction
-                states_list[i+1] = (states)
-                x = intermediate_outputs_lst[0]
-                for j in range(i+1):
-                    x += scalar_multiplier_list[int(i*(i+1)/2) + j] * intermediate_outputs_lst[j+1]
+            # # remaining layers
+            # for i in range(self.num_skip_connections):
+            #     prediction, states = self.rnn_list[i+1](
+            #         x,
+            #         initial_state=states_list[i+1],
+            #         training=training,
+            #     )
+            #     intermediate_outputs_lst[i+1] = prediction
+            #     states_list[i+1] = (states)
+            #     x = intermediate_outputs_lst[0]
+            #     for j in range(i+1):
+            #         x += scalar_multiplier_list[int(i*(i+1)/2) + j] * intermediate_outputs_lst[j+1]
             
-            x = x[:, -1:, :]
-            # running through the final dense layers
-            for j in range(len(self.dense)):
-                x = layers.TimeDistributed(self.dense[j])(x, training=training)
+            # x = x[:, -1:, :]
+            # # running through the final dense layers
+            # for j in range(len(self.dense_layer_act_func)):
+            #     if self.denselayer_dropout_rate > 0.0:
+            #         x = self.dense_dropout[j](x, training=training)
+            #     x = layers.TimeDistributed(self.dense[j])(x, training=training)
+
+            # if self.use_weights_post_dense == True:
+            #     x = layers.TimeDistributed(self.dense[-1])(x, training=training)
+
+            x, states_list = self.onestep(
+                x,
+                training,
+                states_list,
+                intermediate_outputs_lst,
+                scalar_multiplier_list,
+            )
 
             predictions_list.append(x[:, -1, :])
 
@@ -528,6 +613,9 @@ class AR_RNN_GRU(Model):
             'use_weights_post_dense':self.use_weights_post_dense,
             'in_steps':self.in_steps,
             'out_steps':self.out_steps,
+            'zoneout_rate':self.zoneout_rate,
+            'rnncell_dropout_rate':self.rnncell_dropout_rate,
+            'denselayer_dropout_rate':self.denselayer_dropout_rate,
         }
         with open(file_name, 'w') as f:
             f.write(str(class_dict))

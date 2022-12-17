@@ -117,6 +117,7 @@ class AR_AERNN_GRU(Model):
             covmat_lmda,
             time_stddev_ogdata,
             time_mean_ogdata,
+            loss_weights=None
         ):
         
         super(AR_AERNN_GRU, self).__init__()
@@ -129,6 +130,7 @@ class AR_AERNN_GRU(Model):
         self.covmat_lmda = covmat_lmda
         self.time_stddev_ogdata = time_stddev_ogdata
         self.time_mean_ogdata = time_mean_ogdata
+        self.loss_weights = loss_weights
 
         return
 
@@ -139,106 +141,130 @@ class AR_AERNN_GRU(Model):
         #         self.rnn_net.init_state[i] = [tf.zeros(shape=(input_shape[0], self.rnn_net.rnn_layers_units[i]), dtype='float32')]
 
     # @tf.function
-    def _warmup(self, inputs, scalar_multiplier_list, training=None, usenoiseflag=None):
+    def _warmup(self, inputs, training=None, usenoiseflag=None):
         ### Initialize the GRU state.
 
         states_list = []
-        intermediate_outputs_lst = []
+        # intermediate_outputs_lst = []
 
         ### Passing input through the GRU layers
         # first layer
         x = inputs
-        x = layers.TimeDistributed(self.ae_net.encoder_net)(x, training=training)
+        x = layers.TimeDistributed(self.ae_net.encoder_net)(
+            x,
+            training=training
+        )
         x = self.normalization_preRNN(x)
-        x, states = self.rnn_net.rnn_list[0](
+        
+        rnnwarmup_return_tuple = self.rnn_net._warmup(
             x,
             training=training,
+            usenoiseflag=usenoiseflag,
         )
-        intermediate_outputs_lst.append(x)
-        states_list.append(states)
+        output = rnnwarmup_return_tuple[0]
+        states_list = rnnwarmup_return_tuple[1]
+        if len(rnnwarmup_return_tuple) > 2:
+            intermediate_outputs_lst = rnnwarmup_return_tuple[2]
+            scalar_multiplier_list = rnnwarmup_return_tuple[3]
 
-        # remaining layers
-        for i in range(self.rnn_net.num_skip_connections):
-            prediction, states = self.rnn_net.rnn_list[i+1](
-                x,
-                training=training,
-            )
-            intermediate_outputs_lst.append(prediction)
-            states_list.append(states)
-            x = intermediate_outputs_lst[0]
-            for j in range(i+1):
-                x += scalar_multiplier_list[int(i*(i+1)/2) + j] * intermediate_outputs_lst[j+1]
+        # x, states = self.rnn_net.rnn_list[0](
+        #     x,
+        #     training=training,
+        # )
+        # intermediate_outputs_lst.append(x)
+        # states_list.append(states)
+
+        # # remaining layers
+        # for i in range(self.rnn_net.num_skip_connections):
+        #     prediction, states = self.rnn_net.rnn_list[i+1](
+        #         x,
+        #         training=training,
+        #     )
+        #     intermediate_outputs_lst.append(prediction)
+        #     states_list.append(states)
+        #     x = intermediate_outputs_lst[0]
+        #     for j in range(i+1):
+        #         x += scalar_multiplier_list[int(i*(i+1)/2) + j] * intermediate_outputs_lst[j+1]
         
-        output = x[:, -1:, :]
-        # running through the final dense layers
-        for j in range(len(self.rnn_net.dense)):
-            output = layers.TimeDistributed(self.rnn_net.dense[j])(output, training=training)
+        # output = x[:, -1:, :]
+        # # running through the final dense layers
+        # for j in range(len(self.rnn_net.dense)):
+        #     output = layers.TimeDistributed(self.rnn_net.dense[j])(output, training=training)
 
         output = self.reverseNormalization_postRNN(output)
-        output = layers.TimeDistributed(self.ae_net.decoder_net)(output, training=training)
+        output = layers.TimeDistributed(self.ae_net.decoder_net)(
+            output,
+            training=training
+        )
 
-        return output, states_list, intermediate_outputs_lst
+        if len(rnnwarmup_return_tuple) == 2:
+            return_tuple = (output, states_list)
+        else:
+            return_tuple = (output, states_list, intermediate_outputs_lst, scalar_multiplier_list)
+
+        return return_tuple
 
     # @tf.function
     def call(self, inputs, training=None, usenoiseflag=False):
 
         predictions_list = []
 
-        # computing the scalar multipliers
-        if type(self.rnn_net.scalar_weights) != type(None):
-            scalar_multiplier_list = self.rnn_net.scalar_weights #* self.dt_rnn
-        else:
-            scalar_multiplier_list = []
-            fac = self.rnn_net.dt_rnn
-            for i in range(self.rnn_net.num_skip_connections):
-                sum_ = 0.0
-                for j in range(i+1):
-                    sum_ += tf.math.exp(self.rnn_net.scalar_multiplier_pre_list[int(i*(i+1)/2) + j])
-                for j in range(i+1):
-                    scalar_multiplier_list.append(
-                        tf.math.exp(fac * self.rnn_net.scalar_multiplier_pre_list[int(i*(i+1)/2) + j]) / sum_ # not corrected, weights in a row need not sum to one, they sum to the fractional time step
-                    )
-
         ### warming up the RNN
-        x, states_list, intermediate_outputs_lst = self._warmup(
+        warmup_tuple = self._warmup(
             inputs,
-            scalar_multiplier_list,
             training=False,
-            usenoiseflag=usenoiseflag
+            usenoiseflag=usenoiseflag,
         )
-        predictions_list.append(x[:, -1, :])
+        
+        x = warmup_tuple[0]
+        states_list = warmup_tuple[1]
+        if len(warmup_tuple) > 2:
+            intermediate_outputs_lst = warmup_tuple[2]
+            scalar_multiplier_list = warmup_tuple[3]
+        else:
+            intermediate_outputs_lst = None
+            scalar_multiplier_list = None
 
+        predictions_list.append(x[:, -1, :])
 
         ### Passing input through the GRU layers
         for tstep in range(1, self.rnn_net.out_steps):
             x = layers.TimeDistributed(self.ae_net.encoder_net)(x, training=training)
             x = self.normalization_preRNN(x)
 
-            x, states = self.rnn_net.rnn_list[0](
-                x,
-                initial_state=states_list[0],
-                training=training,
-            )
-            intermediate_outputs_lst[0] = x
-            states_list[0] = states
+            # x, states = self.rnn_net.rnn_list[0](
+            #     x,
+            #     initial_state=states_list[0],
+            #     training=training,
+            # )
+            # intermediate_outputs_lst[0] = x
+            # states_list[0] = states
 
-            # remaining layers
-            for i in range(self.rnn_net.num_skip_connections):
-                prediction, states = self.rnn_net.rnn_list[i+1](
-                    x,
-                    initial_state=states_list[i+1],
-                    training=training,
-                )
-                intermediate_outputs_lst[i+1] = prediction
-                states_list[i+1] = (states)
-                x = intermediate_outputs_lst[0]
-                for j in range(i+1):
-                    x += scalar_multiplier_list[int(i*(i+1)/2) + j] * intermediate_outputs_lst[j+1]
+            # # remaining layers
+            # for i in range(self.rnn_net.num_skip_connections):
+            #     prediction, states = self.rnn_net.rnn_list[i+1](
+            #         x,
+            #         initial_state=states_list[i+1],
+            #         training=training,
+            #     )
+            #     intermediate_outputs_lst[i+1] = prediction
+            #     states_list[i+1] = (states)
+            #     x = intermediate_outputs_lst[0]
+            #     for j in range(i+1):
+            #         x += scalar_multiplier_list[int(i*(i+1)/2) + j] * intermediate_outputs_lst[j+1]
             
-            x = x[:, -1:, :]
-            # running through the final dense layers
-            for j in range(len(self.rnn_net.dense)):
-                x = layers.TimeDistributed(self.rnn_net.dense[j])(x, training=training)
+            # x = x[:, -1:, :]
+            # # running through the final dense layers
+            # for j in range(len(self.rnn_net.dense)):
+            #     x = layers.TimeDistributed(self.rnn_net.dense[j])(x, training=training)
+
+            x, states_list = self.rnn_net.onestep(
+                x=x,
+                training=training,
+                states_list=states_list,
+                intermediate_outputs_lst=intermediate_outputs_lst,
+                scalar_multiplier_list=scalar_multiplier_list,
+            )
 
             x = self.reverseNormalization_postRNN(x)
             x = layers.TimeDistributed(self.ae_net.decoder_net)(x, training=training)
@@ -255,6 +281,8 @@ class AR_AERNN_GRU(Model):
         x, y, sample_weight = data_adapter.unpack_x_y_sample_weight(data)
         sw_cov = 1.0 if sample_weight is None else sample_weight
         
+        # print(x.shape, y.shape, sample_weight, sw_cov)
+        
         with tf.GradientTape() as tape:
             ypred = self.call(x, training=True, usenoiseflag=True)
             loss = self.compiled_loss(
@@ -266,6 +294,10 @@ class AR_AERNN_GRU(Model):
             ypred_renormalized = self.reverseNormalization_postAE(ypred) - self.time_mean_ogdata
 
             ytrue_renormalized = self.reverseNormalization_postAE(y) - self.time_mean_ogdata
+            
+            if isinstance(self.loss_weights, type(None)) == False:
+                ypred_renormalized = ypred_renormalized * self.loss_weights**0.5
+                ytrue_renormalized = ytrue_renormalized * self.loss_weights**0.5
 
             covmat_pred = tf.linalg.matmul(
                 ypred_renormalized,
@@ -286,6 +318,8 @@ class AR_AERNN_GRU(Model):
             loss = loss + covmat_fro_loss
             # print(tf.norm(covmat_true - covmat_pred, ord='fro', axis=[-2, -1]))
         self._validate_target_and_loss(ypred, loss)
+
+        # print(x.shape, y.shape, loss.shape, sample_weight, sw_cov)
 
         trainable_vars = self.trainable_variables
         gradients = tape.gradient(loss, trainable_vars)

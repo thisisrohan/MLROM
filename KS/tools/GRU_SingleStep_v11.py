@@ -138,6 +138,8 @@ class RNN_GRU(Model):
             use_learnable_state=True,
             stateful=False,
             zoneout_rate=0.0,
+            rnncell_dropout_rate=0.0,
+            denselayer_dropout_rate=0.0,
             batch_size=1,
             scalar_weights=None,
             use_weights_post_dense=False,):
@@ -159,6 +161,8 @@ class RNN_GRU(Model):
         self.batch_size = batch_size
         self.stateful = stateful # ideally do not use `stateful`=True and `use_learnable_state`=True at the same time.
         self.zoneout_rate = zoneout_rate
+        self.rnncell_dropout_rate = rnncell_dropout_rate
+        self.denselayer_dropout_rate = denselayer_dropout_rate
         self.scalar_weights = scalar_weights
         self.use_weights_post_dense = use_weights_post_dense
         if self.load_file is not None:
@@ -195,8 +199,15 @@ class RNN_GRU(Model):
                 self.scalar_weights = load_dict['scalar_weights']
             if 'use_weights_post_dense' in load_dict.keys():
                 self.use_weights_post_dense = load_dict['use_weights_post_dense']
+            if 'denselayer_dropout_rate' in load_dict.keys():
+                self.denselayer_dropout_rate = load_dict['denselayer_dropout_rate']
+            if 'rnncell_dropout_rate' in load_dict.keys():
+                self.rnncell_dropout_rate = load_dict['rnncell_dropout_rate']
         self.num_rnn_layers = len(self.rnn_layers_units)
 
+        self.zoneout_rate = min(1.0, max(0.0, self.zoneout_rate))
+        self.denselayer_dropout_rate = min(1.0, max(0.0, self.denselayer_dropout_rate))
+        self.rnncell_dropout_rate = min(1.0, max(0.0, self.rnncell_dropout_rate))
 
         if isinstance(self.dense_layer_act_func, list) == False:
             self.dense_layer_act_func = [self.dense_layer_act_func]
@@ -234,7 +245,8 @@ class RNN_GRU(Model):
                     units=self.rnn_layers_units[0],
                     kernel_regularizer=reg(self.lambda_reg),
                     bias_regularizer=reg(self.lambda_reg),
-                    zoneout_rate=self.zoneout_rate
+                    zoneout_rate=self.zoneout_rate,
+                    dropout=self.rnncell_dropout_rate,
                 ),
                 return_sequences=True,
                 stateful=self.stateful,
@@ -246,7 +258,8 @@ class RNN_GRU(Model):
                 units=self.rnn_layers_units[1],
                 kernel_regularizer=reg(self.lambda_reg),
                 bias_regularizer=reg(self.lambda_reg),
-                zoneout_rate=self.zoneout_rate
+                zoneout_rate=self.zoneout_rate,
+                dropout=self.rnncell_dropout_rate,
             )
             self.rnn_list.extend([
                 layers.RNN(
@@ -274,6 +287,14 @@ class RNN_GRU(Model):
                 bias_regularizer=reg(self.lambda_reg)
             ) for i in range(len(self.dense_layer_act_func))
         ]
+        
+        self.dense_dropout = []
+        if self.denselayer_dropout_rate > 0.0:
+            self.dense_dropout = [
+                layers.Dropout(
+                    self.denselayer_dropout_rate
+                ) for i in range(len(self.dense_layer_act_func))
+            ]
 
         if self.use_weights_post_dense == True:
             self.dense.append(
@@ -402,8 +423,13 @@ class RNN_GRU(Model):
         
         output = x
         # running through the final dense layers
-        for j in range(len(self.dense)):
+        for j in range(len(self.dense_layer_act_func)):
+            if self.denselayer_dropout_rate > 0.0:
+                output = self.dense_dropout[j](output, training=training)
             output = layers.TimeDistributed(self.dense[j])(output, training=training)
+
+        if self.use_weights_post_dense == True:
+            output = layers.TimeDistributed(self.dense[-1])(output, training=training)
 
         return output
 
@@ -438,6 +464,9 @@ class RNN_GRU(Model):
             'stateful':self.stateful,
             'scalar_weights':self.scalar_weights,
             'use_weights_post_dense':self.use_weights_post_dense,
+            'zoneout_rate':self.zoneout_rate,
+            'rnncell_dropout_rate':self.rnncell_dropout_rate,
+            'denselayer_dropout_rate':self.denselayer_dropout_rate,
         }
         with open(file_name, 'w') as f:
             f.write(str(class_dict))
