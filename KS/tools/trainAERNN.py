@@ -74,6 +74,10 @@ def trainAERNN(
     train_split = kwargs['train_split']
     test_split = kwargs['test_split']
     val_split = kwargs['val_split']
+    freeze_layers = kwargs.pop('freeze_layers', [])
+    clipnorm = kwargs.pop('clipnorm', None)
+    global_clipnorm = kwargs.pop('global_clipnorm', None)
+    ESN_flag = kwargs.pop('ESN_flag', False)
 
     ### create autoencoder and load weights
     ae_net = Autoencoder(all_data.shape[1], load_file=load_file_ae)
@@ -254,6 +258,9 @@ def trainAERNN(
         rnn_net.build(input_shape=(batch_size, training_data_rnn_input.shape[1], rnn_net.data_dim))        
     rnn_net.load_weights_from_file(wt_file_rnn)
     
+    for i in range(len(freeze_layers)):
+        rnn_net.rnn_list[freeze_layers[i]].trainable = False
+    
     # compiling the RNN network
     rnn_net.compile(
         optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate_list[0]),
@@ -263,13 +270,15 @@ def trainAERNN(
         metrics='mse'
     )
 
-    if behaviour == 'loadCheckpointAndContinueTraining':
+    if behaviour == 'loadCheckpointAndContinueTraining':# and ESN_flag == False:
         # this loads the weights/attributes of the optimizer as well
+        wt_file = tf.train.latest_checkpoint(dir_name_AR_AErnn+'/checkpoints')
         if strategy is not None:
             with strategy.scope():
-                rnn_net.load_weights(wt_file_rnn)
+                rnn_net.load_weights(wt_file)
         else:
-            rnn_net.load_weights(wt_file_rnn)
+            rnn_net.load_weights(wt_file)
+
 
     ### AE-RNN
     AR_AERNN_net = AR_AERNN(
@@ -281,17 +290,19 @@ def trainAERNN(
         time_stddev_ogdata,
         time_mean_ogdata,
         loss_weights=loss_weights,
+        clipnorm=clipnorm,
+        global_clipnorm=global_clipnorm,
     )
 
     AR_AERNN_net.build(input_shape=(batch_size,)+training_data_rnn_input.shape[1:])
 
     
     AR_AERNN_net.compile(
-        optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate_list[0]),
+        optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate_list[0]),# clipnorm=clipnorm),
         loss=AERNN_loss(divisor_arr=time_stddev, loss_weights=loss_weights),#_ogdata/normalization_constant_arr_aedata[1, :]),
         run_eagerly=False,
         # loss_weights=loss_weights,
-        metrics=['mse', NMSE(divisor_arr=time_stddev)]
+        metrics=['mse', NMSE(divisor_arr=time_stddev)],
     )
     
     if behaviour == 'initialiseAndTrainFromScratch':
@@ -307,19 +318,26 @@ def trainAERNN(
         savelosses_cb_vallossarr = np.ones(shape=arr_len)*np.NaN
         savelosses_cb_trainlossarr = np.ones(shape=arr_len)*np.NaN
         starting_lr_idx = 0
-        num_epochs_left = epochs if type(epochs) != type([]) else epochs[0]
+        num_epochs_left = epochs if type(epochs) != type([]) else [ep for ep in epochs]
         earlystopping_wait = 0
     elif behaviour == 'loadCheckpointAndContinueTraining':
+        if type(epochs) != type([]):
+            arr_len = epochs*len(learning_rate_list)
+        else:
+            arr_len = 0
+            for i in range(len(epochs)):
+                arr_len += epochs[i]
         val_loss_hist, train_loss_hist, lr_change, starting_lr_idx, num_epochs_left, val_loss_arr_fromckpt, train_loss_arr_fromckpt, earlystopping_wait = readAndReturnLossHistories(
             dir_name_ae=dir_name_AR_AErnn,
             dir_sep='/',
             epochs=epochs,
             learning_rate_list=learning_rate_list,
-            return_earlystopping_wait=True)
+            return_earlystopping_wait=True,
+            fname='LossHistoriesCheckpoint-{}_outsteps.hdf5'.format(num_outsteps))
         savelosses_cb_vallossarr = val_loss_arr_fromckpt
         savelosses_cb_trainlossarr = train_loss_arr_fromckpt
     elif behaviour == 'loadFinalNetAndPlot':
-        with open(dir_name_AR_AErnn+'/final_net/losses.txt') as f:
+        with open(dir_name_AR_AErnn+'/final_net/losses-{}_outsteps.txt'.format(num_outsteps)) as f:
             lines = f.readlines()
         
         losses_dict = eval(''.join(lines))
@@ -328,6 +346,16 @@ def trainAERNN(
         train_loss_hist = losses_dict['train_loss_hist']
         lr_change = losses_dict['lr_change']
         test_loss = losses_dict['test_loss']
+
+    train_NMSE_hist = []
+    val_NMSE_hist = []
+    
+    train_MSE_hist = []
+    val_MSE_hist = []
+    
+    train_global_gradnorm_hist = []
+    train_covmat_fro_loss_hist = []
+    
 
     ### training AR AE-RNN
     if behaviour == 'initialiseAndTrainFromScratch' or behaviour == 'loadCheckpointAndContinueTraining':
@@ -404,8 +432,9 @@ def trainAERNN(
             # print('early_stopping_cb.wait : {}\n'.format(early_stopping_cb.wait))
 
             if i == starting_lr_idx:
-                EPOCHS = num_epochs_left
-                savelosses_cb.update_offset(epochs_so_far + epochs_thislr-num_epochs_left)
+                num_epochs_left_i = num_epochs_left[i] if type(num_epochs_left) == type([]) else num_epochs_left
+                EPOCHS = num_epochs_left_i
+                savelosses_cb.update_offset(epochs_so_far + epochs_thislr-num_epochs_left_i)
             else:
                 EPOCHS = epochs_thislr
                 savelosses_cb.update_offset(epochs_so_far + 0)
@@ -431,6 +460,15 @@ def trainAERNN(
             val_loss_hist.extend(history.history['val_loss'])
             train_loss_hist.extend(history.history['loss'])
             
+            val_NMSE_hist.extend(history.history['val_NMSE'])
+            train_NMSE_hist.extend(history.history['NMSE'])
+            
+            val_MSE_hist.extend(history.history['val_mse'])
+            train_MSE_hist.extend(history.history['mse'])
+            
+            train_global_gradnorm_hist.extend(history.history['global_gradnorm'])
+            train_covmat_fro_loss_hist.extend(history.history['covmat_fro_loss'])
+
             if i == starting_lr_idx:
                 lr_change[i+1] += len(history.history['val_loss'])
             else:
@@ -445,9 +483,9 @@ def trainAERNN(
         for layer in AR_AERNN_net.rnn_net.rnn_list:
             if layer.stateful == True:
                 layer.reset_states()
-        print(testing_data_rnn_input.shape, testing_data_rnn_output.shape)
+        # print(testing_data_rnn_input.shape, testing_data_rnn_output.shape)
         
-        test_loss = 0.0
+        test_mse = 0.0
         for i in range(int(testing_data_rnn_input.shape[0]//batch_size)):
             # i_test_loss = rnn_net.evaluate(
             #     testing_data_rnn_input[i*batch_size:(i+1)*batch_size, :, :],
@@ -456,12 +494,12 @@ def trainAERNN(
             data_in_i = testing_data_rnn_input[i*batch_size:(i+1)*batch_size, :, :]
             data_out_i = testing_data_rnn_output[i*batch_size:(i+1)*batch_size, :, :]
             temp = AR_AERNN_net.call(data_in_i, training=False)
-            i_test_loss = np.mean(
+            i_test_mse = np.mean(
                 (
                     (data_out_i - temp.numpy()) * normalization_constant_arr_aedata[1, :] / time_stddev_ogdata
                 )**2
             )
-            test_loss = (i*test_loss + i_test_loss)/(i+1)
+            test_mse = (i*test_mse + i_test_mse)/(i+1)
 
         save_path = dir_name_AR_AErnn+'/final_net'
 
@@ -471,10 +509,18 @@ def trainAERNN(
 
         with open(save_path+'/losses-{}_outsteps.txt'.format(num_outsteps), 'w') as f:
             f.write(str({
+                'lr_change':lr_change,
+                'test_mse':test_mse,
+                'clipnorm':clipnorm,
+                'global_clipnorm':global_clipnorm,
                 'val_loss_hist':val_loss_hist,
                 'train_loss_hist':train_loss_hist,
-                'lr_change':lr_change,
-                'test_loss':test_loss
+                'val_MSE_hist':val_MSE_hist,
+                'train_MSE_hist':train_MSE_hist,
+                'val_NMSE_hist':val_NMSE_hist,
+                'train_NMSE_hist':train_NMSE_hist,
+                'train_global_gradnorm_hist':train_global_gradnorm_hist,
+                'train_covmat_fro_loss_hist':train_covmat_fro_loss_hist,
             }))
             
         if normalize_dataset == True:
@@ -497,11 +543,51 @@ def trainAERNN(
         training_loss=train_loss_hist,
         val_loss=val_loss_hist,
         lr_change=lr_change,
-        learning_rate_list=learning_rate_list
+        learning_rate_list=learning_rate_list,
     )
-
     plt.savefig(dir_name_plot+'/loss_history-{}_outsteps.png'.format(num_outsteps), dpi=300, bbox_inches='tight')
     plt.show()
+    plt.clf()
+    
+    
+    fig, ax = plot_losses(
+        training_loss=train_MSE_hist,
+        val_loss=val_MSE_hist,
+        lr_change=lr_change,
+        learning_rate_list=learning_rate_list,
+        legend_list=['Training MSE', 'Validation MSE'],
+        xlabel='Epoch',
+        ylabel='MSE',
+    )
+    plt.savefig(dir_name_plot+'/MSE_history-{}_outsteps.png'.format(num_outsteps), dpi=300, bbox_inches='tight')
+    plt.show()
+    plt.clf()
+    
+    fig, ax = plot_losses(
+        training_loss=train_NMSE_hist,
+        val_loss=val_NMSE_hist,
+        lr_change=lr_change,
+        learning_rate_list=learning_rate_list,
+        legend_list=['Training NMSE', 'Validation NMSE'],
+        xlabel='Epoch',
+        ylabel='NMSE',
+    )
+    plt.savefig(dir_name_plot+'/NMSE_history-{}_outsteps.png'.format(num_outsteps), dpi=300, bbox_inches='tight')
+    plt.show()
+    plt.clf()
+    
+    fig, ax = plot_losses(
+        training_loss=train_global_gradnorm_hist,
+        val_loss=None,
+        lr_change=lr_change,
+        learning_rate_list=learning_rate_list,
+        legend_list=['global_gradnorm'],
+        xlabel='Epoch',
+        ylabel='gradnorm',
+    )
+    plt.savefig(dir_name_plot+'/train_global_gradnorm_history-{}_outsteps.png'.format(num_outsteps), dpi=300, bbox_inches='tight')
+    plt.show()
+    plt.clf()
     
     ### cleaning up
     del(training_data_rnn_input)

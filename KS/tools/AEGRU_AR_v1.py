@@ -117,7 +117,9 @@ class AR_AERNN_GRU(Model):
             covmat_lmda,
             time_stddev_ogdata,
             time_mean_ogdata,
-            loss_weights=None
+            loss_weights=None,
+            clipnorm=None,
+            global_clipnorm=None
         ):
         
         super(AR_AERNN_GRU, self).__init__()
@@ -131,6 +133,8 @@ class AR_AERNN_GRU(Model):
         self.time_stddev_ogdata = time_stddev_ogdata
         self.time_mean_ogdata = time_mean_ogdata
         self.loss_weights = loss_weights
+        self.clipnorm = clipnorm
+        self.global_clipnorm = global_clipnorm # if this is specified then specifying `clipnorm` has no effect
 
         return
 
@@ -310,12 +314,15 @@ class AR_AERNN_GRU(Model):
                 transpose_a=True,
             )
             
-            covmat_fro_loss = self.covmat_lmda * sw_cov * tf.norm(
+            covmat_fro_loss = tf.norm(
                 (covmat_true - covmat_pred) / self.time_stddev_ogdata**2,
                 ord='fro',
                 axis=[-2, -1]
             )
+            covmat_fro_loss = self.covmat_lmda * sw_cov * tf.math.reduce_mean(covmat_fro_loss)
+            # print(loss.shape)
             loss = loss + covmat_fro_loss
+            # print(loss.shape)
             # print(tf.norm(covmat_true - covmat_pred, ord='fro', axis=[-2, -1]))
         self._validate_target_and_loss(ypred, loss)
 
@@ -323,15 +330,33 @@ class AR_AERNN_GRU(Model):
 
         trainable_vars = self.trainable_variables
         gradients = tape.gradient(loss, trainable_vars)
-        
+        # print(gradients)
+        # print(type(gradients))
+        if self.global_clipnorm is not None:
+            gradients, _ = tf.clip_by_global_norm(gradients, self.global_clipnorm)
+        elif self.clipnorm is not None:
+            global_clipnorm = 0.0
+            for elem in gradients:
+                if elem is not None:
+                    global_clipnorm += self.clipnorm**2
+            global_clipnorm = global_clipnorm**0.5
+            gradients, _ = tf.clip_by_global_norm(gradients, global_clipnorm)
+
+        global_gradnorm = 0.0
+        for elem in gradients:
+            if elem is not None:
+                global_gradnorm += tf.norm(elem, ord='euclidean')**2
+        global_gradnorm = global_gradnorm**0.5
+
         self.optimizer.apply_gradients(zip(gradients, trainable_vars))
         
-        return self.compute_metrics(x, y, ypred, sample_weight, covmat_fro_loss)
+        return self.compute_metrics(x, y, ypred, sample_weight, covmat_fro_loss, global_gradnorm)
     
-    def compute_metrics(self, x, y, y_pred, sample_weight, covmat_fro_loss=0.0):
+    def compute_metrics(self, x, y, y_pred, sample_weight, covmat_fro_loss=0.0, global_gradnorm=0.0):
         metric_results = super(AR_AERNN_GRU, self).compute_metrics(x, y, y_pred, sample_weight)
         # return_dict = self.get_metrics_result()
         metric_results['covmat_fro_loss'] = covmat_fro_loss
+        metric_results['global_gradnorm'] = global_gradnorm
         return metric_results
     
 

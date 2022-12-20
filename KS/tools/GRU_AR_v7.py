@@ -254,6 +254,7 @@ class AR_RNN_GRU(Model):
                     units=units,
                     kernel_regularizer=reg(self.lambda_reg),
                     bias_regularizer=reg(self.lambda_reg),
+                    recurrent_regularizer=reg(self.lambda_reg),
                     zoneout_rate=self.zoneout_rate,
                     dropout=self.rnncell_dropout_rate,
                 ),

@@ -133,9 +133,9 @@ class ESN_Cell(layers.Layer):
     def output_size(self):
         return self.state_num_units
 
-    def get_initial_state(self, inputs=None, batch_size=None, dtype=None):
-        batch_size = inputs.shape[0] if inputs.shape[0] != None else 1
-        return tf.zeros(shape=(batch_size, inputs.shape[-1]), dtype='float32')
+    # def get_initial_state(self, inputs=None, batch_size=None, dtype=None):
+    #     batch_size = inputs.shape[0] if inputs.shape[0] != None else 1
+    #     return tf.zeros(shape=(batch_size, inputs.shape[-1]), dtype='float32')
 
         
         
@@ -165,6 +165,7 @@ class ESN(Model):
             prng_seed=42,
             usebias_Wout=False,
             batch_size=1,
+            **kwargs,
             ):
         
         super(ESN, self).__init__()

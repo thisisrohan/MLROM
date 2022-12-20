@@ -821,21 +821,30 @@ def plot_latent_states(
 
 def plot_losses(
         training_loss,
-        val_loss,
-        lr_change,
+        val_loss=None,
+        lr_change=[0],
         learning_rate_list=None,
         lr_y_placement_axes_coord=0.5,
-        lr_x_offset_axes_coord=0.06):
+        lr_x_offset_axes_coord=0.06,
+        legend_list=['Training Loss', 'Validation Loss'],
+        xlabel='Epoch',
+        ylabel='Loss',
+        traininglossplot_args=['r--'],
+        traininglossplot_kwargs={},
+        vallossplot_args=['b-'],
+        vallossplot_kwargs={'linewidth':0.8},
+        ):
 
     epoch_count = range(1, len(training_loss) + 1)
 
     fig, ax = plt.subplots()
 
-    ax.semilogy(epoch_count, training_loss, 'r--')
-    ax.semilogy(epoch_count, val_loss, 'b-', linewidth=0.8)
-    ax.legend(['Training Loss', 'Validation Loss'])
-    ax.set_xlabel('Epoch')
-    ax.set_ylabel('Loss')
+    ax.semilogy(epoch_count, training_loss, *traininglossplot_args, **traininglossplot_kwargs)
+    if type(val_loss) != type(None):
+        ax.semilogy(epoch_count, val_loss, *vallossplot_args, **vallossplot_kwargs)
+    ax.legend(legend_list)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
     ax.grid(True)
     ax.set_axisbelow(True)
 
@@ -1137,9 +1146,10 @@ def readAndReturnLossHistories(
         dir_sep,
         epochs,
         learning_rate_list,
-        return_earlystopping_wait=False):
+        return_earlystopping_wait=False,
+        fname='LossHistoriesCheckpoint.hdf5'):
 
-    with h5py.File(dir_name_ae+'{ds}checkpoints{ds}LossHistoriesCheckpoint.hdf5'.format(ds=dir_sep), 'r') as f:
+    with h5py.File(dir_name_ae+'{ds}checkpoints{ds}'.format(ds=dir_sep)+fname, 'r') as f:
         val_loss_arr_fromckpt = np.array(f['val_loss_arr'])
         train_loss_arr_fromckpt = np.array(f['train_loss_arr'])
     
@@ -1147,21 +1157,36 @@ def readAndReturnLossHistories(
     train_loss_hist = []
     lr_change=[0]
     
-    num_epochs_left = epochs
+    if type(epochs) != type([]):
+        epochs = [epochs]*len(learning_rate_list)
+        epochs_og_list_flag = False
+    else:
+        epochs_og_list_flag = True
+    # num_epochs_left = epochs
+    num_epochs_left = [ep for ep in epochs]
     starting_lr_idx = 0
+    epochs_covered = 0
+    # for j in range(len(epochs)):
+    #     epochs_j = epochs[j]
     for i in range(len(learning_rate_list)):
-        nan_flags = np.isnan(val_loss_arr_fromckpt[epochs*i:epochs*(i+1)])
+        epochs_i = epochs[i]
+        nan_flags = np.isnan(val_loss_arr_fromckpt[epochs_covered + epochs_i*i:epochs_i*(i+1)])
         if nan_flags[0] == True:
             # this and all further learning rates were not reached in previous training session
             break
         else:
             temp_ = np.where(nan_flags == False)[0]
-            num_epochs_left = epochs - len(temp_)
+            num_epochs_left[i] = epochs_i - len(temp_)
             starting_lr_idx = i
     
-            val_loss_hist.extend(val_loss_arr_fromckpt[epochs*i:epochs*(i+1)][temp_])
-            train_loss_hist.extend(train_loss_arr_fromckpt[epochs*i:epochs*(i+1)][temp_])
+            val_loss_hist.extend(val_loss_arr_fromckpt[epochs_covered + epochs_i*i:epochs_i*(i+1)][temp_])
+            train_loss_hist.extend(train_loss_arr_fromckpt[epochs_covered + epochs_i*i:epochs_i*(i+1)][temp_])
             lr_change.append(lr_change[i]+len(temp_))
+            
+        epochs_covered += epochs_i
+
+    if epochs_og_list_flag == False:
+        num_epochs_left = num_epochs_left[0]
 
     if return_earlystopping_wait == True:
         min_val_loss = np.min(val_loss_hist)
