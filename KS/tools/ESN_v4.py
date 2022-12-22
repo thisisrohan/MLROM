@@ -277,11 +277,10 @@ class ESN(Model):
                     usebias_Win=self.usebias_Win[i],
                     prng_seed=self.prng_seed,
                     activation=self.ESN_cell_activations[i],
-                    batch_size=batch_size,
                 ),
                 return_sequences=True,
                 stateful=self.stateful,
-                batch_size=batch_size,
+                batch_size=self.batch_size if self.stateful else None,
             ) for i in range(len(self.ESN_layers_units))
         ]
         
@@ -320,7 +319,12 @@ class ESN(Model):
 
     def build(self, input_shape):
 
-        input_shape_ESN = tuple(input_shape)
+        if self.stateful:
+            input_shape_ESN = (None, )
+        else:
+            input_shape_ESN = (self.batch_size, )
+        input_shape_ESN = input_shape_ESN + tuple(input_shape[1:])
+
         for rnnlayer in self.ESN_layers:
             rnnlayer.build(input_shape_ESN)
             input_shape_ESN = input_shape_ESN[0:-1] + (rnnlayer.cell.state_num_units, )
@@ -328,7 +332,7 @@ class ESN(Model):
         self.Wout.build(input_shape_ESN)
         # super(ESN, self).build(input_shape)
         if self.use_weights_post_dense == True:
-            self.postWout.build(input_shape=[None, None, input_shape[-1]])
+            self.postWout.build(input_shape=[None, input_shape[-1]])
 
         self.built = True
 
@@ -365,10 +369,10 @@ class ESN(Model):
             # simply return the hidden states, these are used for computing Wout
             output = x
         else:
-            output = layers.TimeDistributed(self.Wout)(x)
+            output = self.Wout(x) # DO NOT USE layers.TimeDistributed, dense layer takes care of it
             output = self.post_Wout_activation(output)
             if self.use_weights_post_dense == True:
-                output = layers.TimeDistributed(self.postWout)(output)
+                output = self.postWout(output) # DO NOT USE layers.TimeDistributed, single_weights layer takes care of it
 
         return output
 

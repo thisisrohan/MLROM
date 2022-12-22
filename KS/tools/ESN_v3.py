@@ -252,11 +252,10 @@ class ESN(Model):
                     usebias_Win=self.usebias_Win[i],
                     prng_seed=self.prng_seed,
                     activation=self.ESN_cell_activations[i],
-                    batch_size=batch_size,
                 ),
                 return_sequences=True,
                 stateful=self.stateful,
-                batch_size=batch_size,
+                batch_size=self.batch_size if self.stateful else None,
             ) for i in range(len(self.ESN_layers_units))
         ]
         
@@ -286,12 +285,17 @@ class ESN(Model):
 
     def build(self, input_shape):
 
-        input_shape = tuple(input_shape)
-        for rnnlayer in self.ESN_layers:
-            rnnlayer.build(input_shape)
-            input_shape = input_shape[0:-1] + (rnnlayer.cell.state_num_units, )
+        if self.stateful:
+            input_shape_ESN = (None, )
+        else:
+            input_shape_ESN = (self.batch_size, )
+        input_shape_ESN = input_shape_ESN + tuple(input_shape[1:])
 
-        self.Wout.build(input_shape)
+        for rnnlayer in self.rnn_list:
+            rnnlayer.build(input_shape_ESN)
+            input_shape_ESN = input_shape_ESN[0:-1] + (rnnlayer.cell.state_num_units, )
+
+        self.Wout.build(input_shape_ESN)
         # super(ESN, self).build(input_shape)
         
         self.built = True
@@ -329,7 +333,7 @@ class ESN(Model):
             # simply return the hidden states, these are used for computing Wout
             output = x
         else:
-            output = self.Wout(x)
+            output = self.Wout(x) # DO NOT USE layers.TimeDistributed, dense layer takes care of it
 
         return output
 

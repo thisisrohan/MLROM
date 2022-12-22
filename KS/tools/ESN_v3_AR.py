@@ -339,14 +339,20 @@ class ESN(Model):
 
     def build(self, input_shape):
 
-        input_shape = tuple(input_shape)
-        for rnnlayer in self.rnn_list:
-            rnnlayer.build(input_shape)
-            input_shape = input_shape[0:-1] + (rnnlayer.cell.state_num_units, )
+        if self.stateful:
+            input_shape_ESN = (None, )
+        else:
+            input_shape_ESN = (self.batch_size, )
+        input_shape_ESN = input_shape_ESN + tuple(input_shape[1:])
 
-        self.Wout.build(input_shape)
+        for rnnlayer in self.rnn_list:
+            rnnlayer.build(input_shape_ESN)
+            input_shape_ESN = input_shape_ESN[0:-1] + (rnnlayer.cell.state_num_units, )
+
+        self.Wout.build(input_shape_ESN)
         # super(ESN, self).build(input_shape)
-        
+
+        super().build(input_shape)
         self.built = True
 
     def _warmup(self, inputs, training=None, usenoiseflag=False, **kwargs):
@@ -367,7 +373,7 @@ class ESN(Model):
 
         output = x[:, -1:, :]
         output = tf.math.pow(output, self.power_arr)
-        output = layers.TimeDistributed(self.Wout)(x, training=training)
+        output = self.Wout(output, training=training) # DO NOT USE layers.TimeDistributed, dense layer takes care of it
 
         return output, states_list
         
@@ -379,10 +385,11 @@ class ESN(Model):
                 initial_state=states_list[i],
                 training=training,
             )
+            states_list[i] = states
 
         output = x[:, -1:, :]
         output = tf.math.pow(output, self.power_arr)
-        output = layers.TimeDistributed(self.Wout)(x, training=training)
+        output = self.Wout(output, training=training) # DO NOT USE layers.TimeDistributed, dense layer takes care of it
 
         return output, states_list
 
@@ -589,9 +596,9 @@ class ESN(Model):
             Wres_kernel = Wres_kernel.numpy()
 
             Wres = self.rnn_list[i].cell.Wres
-            K.set_value(Wres.kernel, Wres_kernel)
+            K.set_value(Wres.kernel, Wres_kernel / self.rnn_list[i].cell.rho_res_original)
 
-        ### saving Wout
+        ### reading Wout
         K.set_value(self.Wout.kernel, np.array(ESN_net_Wout['kernel']))
         if self.usebias_Wout == True:
             K.set_value(self.Wout.bias, np.array(ESN_net_Wout['bias']))
