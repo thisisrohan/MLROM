@@ -119,7 +119,7 @@ class AR_AERNN_ESN(Model):
             time_mean_ogdata,
             loss_weights=None,
             clipnorm=None,
-            global_clipnorm=None
+            global_clipnorm=None,
         ):
         
         super(AR_AERNN_ESN, self).__init__()
@@ -138,8 +138,8 @@ class AR_AERNN_ESN(Model):
 
         return
 
-    def build(self, input_shape):
-        super(AR_AERNN_ESN, self).build(input_shape)
+    # def build(self, input_shape):
+    #     super(AR_AERNN_ESN, self).build(input_shape)
         # if self.rnn_net.stateful == False and self.rnn_net.use_learnable_state == False:
         #     for i in range(len(self.rnn_net.init_state)):
         #         self.rnn_net.init_state[i] = [tf.zeros(shape=(input_shape[0], self.rnn_net.rnn_layers_units[i]), dtype='float32')]
@@ -280,6 +280,79 @@ class AR_AERNN_ESN(Model):
 
         return output
 
+    def _warmup_upto_tinputminusone(self, inputs, training=False, usenoiseflag=False):
+        ### Initialize the GRU state.
+
+        states_list = []
+        # intermediate_outputs_lst = []
+
+        ### Passing input through the GRU layers
+        # first layer
+        x = inputs[:, 0:-1, :]
+        x = layers.TimeDistributed(self.ae_net.encoder_net)(
+            x,
+            training=training
+        )
+        x = self.normalization_preRNN(x)
+        
+        rnnwarmup_return_tuple = self.rnn_net._warmup(
+            x,
+            training=training,
+            usenoiseflag=usenoiseflag,
+        )
+        # output = rnnwarmup_return_tuple[0]
+        states_list = rnnwarmup_return_tuple[1]
+        if len(rnnwarmup_return_tuple) > 2:
+            intermediate_outputs_lst = rnnwarmup_return_tuple[2]
+            scalar_multiplier_list = rnnwarmup_return_tuple[3]
+
+        # output = self.reverseNormalization_postRNN(output)
+        # output = layers.TimeDistributed(self.ae_net.decoder_net)(
+        #     output,
+        #     training=training
+        # )
+
+        if len(rnnwarmup_return_tuple) == 2:
+            return_tuple = (states_list, )
+        else:
+            return_tuple = (states_list, intermediate_outputs_lst, scalar_multiplier_list)
+
+        return return_tuple
+
+    def _call_for_train(self, inputs, _warmup_upto_tinputminusone_tuple, training=False):
+        x = inputs
+        states_list = _warmup_upto_tinputminusone_tuple[0]
+        if len(_warmup_upto_tinputminusone_tuple) > 1:
+            intermediate_outputs_lst = _warmup_upto_tinputminusone_tuple[1]
+            scalar_multiplier_list = _warmup_upto_tinputminusone_tuple[2]
+        else:
+            intermediate_outputs_lst = None
+            scalar_multiplier_list = None
+
+        predictions_list = []
+        ### Passing input through the GRU layers
+        for tstep in range(self.rnn_net.out_steps):
+            x = layers.TimeDistributed(self.ae_net.encoder_net)(x, training=training)
+            x = self.normalization_preRNN(x)
+
+            x, states_list = self.rnn_net.onestep(
+                x=x,
+                training=training,
+                states_list=states_list,
+                intermediate_outputs_lst=intermediate_outputs_lst,
+                scalar_multiplier_list=scalar_multiplier_list,
+            )
+
+            x = self.reverseNormalization_postRNN(x)
+            x = layers.TimeDistributed(self.ae_net.decoder_net)(x, training=training)
+
+            predictions_list.append(x[:, -1, :])
+
+        output = tf.stack(predictions_list)
+        output = tf.transpose(output, [1, 0, 2])
+        
+        return output
+
     def train_step(self, data):
         # x, y = data
         x, y, sample_weight = data_adapter.unpack_x_y_sample_weight(data)
@@ -287,8 +360,15 @@ class AR_AERNN_ESN(Model):
         
         # print(x.shape, y.shape, sample_weight, sw_cov)
         
+        # _warmup_upto_tinputminusone_tuple = self._warmup_upto_tinputminusone(
+        #     x, training=True, usenoiseflag=True
+        # )
+        
         with tf.GradientTape() as tape:
             ypred = self.call(x, training=True, usenoiseflag=True)
+            # ypred = self._call_for_train(
+            #     x[:, -1:, :], _warmup_upto_tinputminusone_tuple, training=True
+            # )
             loss = self.compiled_loss(
                 y,
                 ypred,
@@ -357,6 +437,12 @@ class AR_AERNN_ESN(Model):
         # return_dict = self.get_metrics_result()
         metric_results['covmat_fro_loss'] = covmat_fro_loss
         metric_results['global_gradnorm'] = global_gradnorm
+        for i in range(len(self.rnn_net.rnn_list)):
+            metric_results['rho_res_{}'.format(i)] = self.rnn_net.rnn_list[i].cell.rho_res
+        for i in range(len(self.rnn_net.rnn_list)):
+            metric_results['alpha_{}'.format(i)] = self.rnn_net.rnn_list[i].cell.alpha
+        for i in range(len(self.rnn_net.rnn_list)):
+            metric_results['omega_in_{}'.format(i)] = self.rnn_net.rnn_list[i].cell.omega_in
         return metric_results
     
 

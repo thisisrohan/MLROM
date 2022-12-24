@@ -266,7 +266,7 @@ class ESN(Model):
 
 
         ### the ESN network
-        self.ESN_layers = [
+        self.rnn_list = [
             layers.RNN(
                 cell=ESN_Cell(
                     omega_in=self.omega_in[i],
@@ -286,22 +286,23 @@ class ESN(Model):
         
         
         ### adding the Wout layer
-        reg = None
-        if self.lambda_reg > 0.0:
-            reg = tf.keras.regularizers.L2(self.lambda_reg)
+        reg = lambda x : None
+        if self.lambda_reg != None:
+            if self.lambda_reg > 0.0:
+                reg = lambda x : tf.keras.regularizers.L2(x)
         self.Wout = layers.Dense(
             self.data_dim,
             use_bias=self.usebias_Wout,
             trainable=True,
             dtype='float32',
             name='Wout',
-            kernel_regularizer=reg,
-            bias_regularizer=reg,
+            kernel_regularizer=reg(self.lambda_reg),
+            bias_regularizer=reg(self.lambda_reg),
         )
         self.post_Wout_activation = tf.keras.activations.get(self.activation_post_Wout)
         
         if self.use_weights_post_dense == True:
-            self.postWout = single_weights(w_regularizer=reg)
+            self.postWout = single_weights(w_regularizer=reg(self.lambda_reg))
 
         self.power_arr = np.ones(shape=self.ESN_layers_units[-1])
         self.power_arr[0::2] = 2
@@ -317,32 +318,32 @@ class ESN(Model):
 
         return
 
-    def build(self, input_shape):
+    # def build(self, input_shape):
 
-        if self.stateful:
-            input_shape_ESN = (None, )
-        else:
-            input_shape_ESN = (self.batch_size, )
-        input_shape_ESN = input_shape_ESN + tuple(input_shape[1:])
+    #     if self.stateful:
+    #         input_shape_ESN = (None, )
+    #     else:
+    #         input_shape_ESN = (self.batch_size, )
+    #     input_shape_ESN = input_shape_ESN + tuple(input_shape[1:])
 
-        for rnnlayer in self.ESN_layers:
-            rnnlayer.build(input_shape_ESN)
-            input_shape_ESN = input_shape_ESN[0:-1] + (rnnlayer.cell.state_num_units, )
+    #     for rnnlayer in self.rnn_list:
+    #         rnnlayer.build(input_shape_ESN)
+    #         input_shape_ESN = input_shape_ESN[0:-1] + (rnnlayer.cell.state_num_units, )
 
-        self.Wout.build(input_shape_ESN)
-        # super(ESN, self).build(input_shape)
-        if self.use_weights_post_dense == True:
-            self.postWout.build(input_shape=[None, input_shape[-1]])
+    #     self.Wout.build(input_shape_ESN)
+    #     # super(ESN, self).build(input_shape)
+    #     if self.use_weights_post_dense == True:
+    #         self.postWout.build(input_shape=[None, input_shape[-1]])
 
-        self.built = True
+    #     self.built = True
 
     @tf.function
     def _callhelperfn(self, x):
         for i in range(len(self.ESN_layers_units)):
-            x = self.ESN_layers[i](x)
+            x = self.rnn_list[i](x)
         return x
 
-    # @tf.function
+    @tf.function
     def call(self, inputs, training=False, manual_training=False):
 
         # inputs shape : (None, time_steps, data_dim)
@@ -391,11 +392,11 @@ class ESN(Model):
         ESN_cell_Wres = f.create_group('ESN_cell_Wres')
         ESN_net_Wout = f.create_group('ESN_net_Wout')
 
-        for i in range(len(self.ESN_layers)):
+        for i in range(len(self.rnn_list)):
             ### saving Win in a sparse manner
             usebias_Win = self.usebias_Win[i]
             
-            Win = self.ESN_layers[i].cell.Win
+            Win = self.rnn_list[i].cell.Win
             Win_kernel_sparse = tf.sparse.from_dense(Win.kernel)
 
             Win_this_cell = ESN_cell_Win.create_group("cell_{}".format(i))
@@ -407,7 +408,7 @@ class ESN(Model):
                 Win_this_cell.create_dataset("bias", data=Win_bias.numpy())
                 
             ### saving Wres in a sparse manner
-            Wres = self.ESN_layers[i].cell.Wres
+            Wres = self.rnn_list[i].cell.Wres
             Wres_kernel_sparse = tf.sparse.from_dense(Wres.kernel)
 
             Wres_this_cell = ESN_cell_Wres.create_group("cell_{}".format(i))
@@ -484,7 +485,7 @@ class ESN(Model):
         ESN_net_Wout = f['ESN_net_Wout']
 
         input_dim = self.data_dim
-        for i in range(len(self.ESN_layers)):
+        for i in range(len(self.rnn_list)):
             ### reading Win, stored in a sparse manner
             usebias_Win = self.usebias_Win[i]
             
@@ -500,7 +501,7 @@ class ESN(Model):
             Win_kernel = tf.sparse.to_dense(Win_kernel)
             Win_kernel = Win_kernel.numpy()
 
-            Win = self.ESN_layers[i].cell.Win
+            Win = self.rnn_list[i].cell.Win
             K.set_value(Win.kernel, Win_kernel)
             if usebias_Win == True:
                 Win_bias = np.array(Win_this_cell["bias"])
@@ -518,7 +519,7 @@ class ESN(Model):
             Wres_kernel = tf.sparse.to_dense(Wres_kernel)
             Wres_kernel = Wres_kernel.numpy()
 
-            Wres = self.ESN_layers[i].cell.Wres
+            Wres = self.rnn_list[i].cell.Wres
             K.set_value(Wres.kernel, Wres_kernel)
 
         ### reading Wout

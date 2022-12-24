@@ -822,6 +822,7 @@ def plot_latent_states(
 def plot_losses(
         training_loss,
         val_loss=None,
+        more_plot_arrs_lst=[],
         lr_change=[0],
         learning_rate_list=None,
         lr_y_placement_axes_coord=0.5,
@@ -833,15 +834,23 @@ def plot_losses(
         traininglossplot_kwargs={},
         vallossplot_args=['b-'],
         vallossplot_kwargs={'linewidth':0.8},
+        more_plot_arrs_args=[],
+        more_plot_arrs_kwargs=[],
+        plot_type='semilogy',
         ):
 
     epoch_count = range(1, len(training_loss) + 1)
 
     fig, ax = plt.subplots()
 
-    ax.semilogy(epoch_count, training_loss, *traininglossplot_args, **traininglossplot_kwargs)
+    eval("ax."+plot_type+"(epoch_count, training_loss, *traininglossplot_args, **traininglossplot_kwargs)")
     if type(val_loss) != type(None):
-        ax.semilogy(epoch_count, val_loss, *vallossplot_args, **vallossplot_kwargs)
+        eval("ax."+plot_type+"(epoch_count, val_loss, *vallossplot_args, **vallossplot_kwargs)")
+    if len(more_plot_arrs_lst) > 0:
+        for i in range(len(more_plot_arrs_lst)):
+            args = more_plot_arrs_args[i]
+            kwargs = more_plot_arrs_kwargs[i]
+            eval("ax."+plot_type+"(epoch_count, more_plot_arrs_lst[i], *args, **kwargs)")
     ax.legend(legend_list)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)

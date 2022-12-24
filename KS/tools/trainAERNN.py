@@ -78,6 +78,7 @@ def trainAERNN(
     clipnorm = kwargs.pop('clipnorm', None)
     global_clipnorm = kwargs.pop('global_clipnorm', None)
     ESN_flag = kwargs.pop('ESN_flag', False)
+    rnn_kwargs = kwargs.pop('rnn_kwargs', {})
 
     ### create autoencoder and load weights
     ae_net = Autoencoder(all_data.shape[1], load_file=load_file_ae)
@@ -188,15 +189,19 @@ def trainAERNN(
         num_val = num_val_arr[i]
         num_test = num_test_arr[i]
 
-        for j in range(batch_size):
-            training_data_rnn_input[training_data_rolling_count+j:training_data_rolling_count+num_train:batch_size] = data_rnn_input[idx[0:num_train]][j::batch_size]
-            training_data_rnn_output[training_data_rolling_count+j:training_data_rolling_count+num_train:batch_size] = data_rnn_output[idx[0:num_train]][j::batch_size]
-            
-            val_data_rnn_input[val_data_rolling_count+j:val_data_rolling_count+num_val:batch_size] = data_rnn_input[idx[num_train:num_train+num_val]][j::batch_size]
-            val_data_rnn_output[val_data_rolling_count+j:val_data_rolling_count+num_val:batch_size] = data_rnn_output[idx[num_train:num_train+num_val]][j::batch_size]
+        nbatches_train = num_train // batch_size
+        nbatches_val = num_val // batch_size
+        nbatches_test = num_test // batch_size
 
-            testing_data_rnn_input[testing_data_rolling_count+j:testing_data_rolling_count+num_test:batch_size] = data_rnn_input[idx[num_train+num_val:num_samples]][j::batch_size]
-            testing_data_rnn_output[testing_data_rolling_count+j:testing_data_rolling_count+num_test:batch_size] = data_rnn_output[idx[num_train+num_val:num_samples]][j::batch_size]
+        for j in range(batch_size):
+            training_data_rnn_input[training_data_rolling_count+j:training_data_rolling_count+num_train:batch_size] = data_rnn_input[idx[0:num_train]][j*nbatches_train:(j+1)*nbatches_train]
+            training_data_rnn_output[training_data_rolling_count+j:training_data_rolling_count+num_train:batch_size] = data_rnn_output[idx[0:num_train]][j*nbatches_train:(j+1)*nbatches_train]
+            
+            val_data_rnn_input[val_data_rolling_count+j:val_data_rolling_count+num_val:batch_size] = data_rnn_input[idx[num_train:num_train+num_val]][j*nbatches_val:(j+1)*nbatches_val]
+            val_data_rnn_output[val_data_rolling_count+j:val_data_rolling_count+num_val:batch_size] = data_rnn_output[idx[num_train:num_train+num_val]][j*nbatches_val:(j+1)*nbatches_val]
+
+            testing_data_rnn_input[testing_data_rolling_count+j:testing_data_rolling_count+num_test:batch_size] = data_rnn_input[idx[num_train+num_val:num_samples]][j*nbatches_test:(j+1)*nbatches_test]
+            testing_data_rnn_output[testing_data_rolling_count+j:testing_data_rolling_count+num_test:batch_size] = data_rnn_output[idx[num_train+num_val:num_samples]][j*nbatches_test:(j+1)*nbatches_test]
 
         training_data_rolling_count += num_train
 
@@ -240,6 +245,7 @@ def trainAERNN(
                 stddev=stddev_rnn,
                 batch_size=batch_size,
                 # stateful=stateful,
+                **rnn_kwargs,
             )
     else:
         rnn_net = AR_RNN(
@@ -249,6 +255,7 @@ def trainAERNN(
             stddev=stddev_rnn,
             batch_size=batch_size,
             # stateful=stateful,
+            **rnn_kwargs,
         )
     save_path = dir_name_AR_AErnn+'/rnn_net'
     if not os.path.isdir(save_path):
@@ -356,6 +363,9 @@ def trainAERNN(
     train_global_gradnorm_hist = []
     train_covmat_fro_loss_hist = []
     
+    rho_res_hist = []
+    alpha_hist = []
+    omega_in_hist = []
 
     ### training AR AE-RNN
     if behaviour == 'initialiseAndTrainFromScratch' or behaviour == 'loadCheckpointAndContinueTraining':
@@ -468,6 +478,22 @@ def trainAERNN(
             
             train_global_gradnorm_hist.extend(history.history['global_gradnorm'])
             train_covmat_fro_loss_hist.extend(history.history['covmat_fro_loss'])
+            
+            if 'rho_res_0' in history.history.keys():
+                temp = []
+                for i in range(len(AR_AERNN_net.rnn_net.rnn_list)):
+                    temp.append(history.history['rho_res_{}'.format(i)])
+                rho_res_hist.append(temp)
+            if 'alpha_0' in history.history.keys():
+                temp = []
+                for i in range(len(AR_AERNN_net.rnn_net.rnn_list)):
+                    temp.append(history.history['alpha_{}'.format(i)])
+                alpha_hist.append(temp)
+            if 'omega_in_0' in history.history.keys():
+                temp = []
+                for i in range(len(AR_AERNN_net.rnn_net.rnn_list)):
+                    temp.append(history.history['omega_in_{}'.format(i)])
+                omega_in_hist.append(temp)
 
             if i == starting_lr_idx:
                 lr_change[i+1] += len(history.history['val_loss'])
@@ -521,6 +547,9 @@ def trainAERNN(
                 'train_NMSE_hist':train_NMSE_hist,
                 'train_global_gradnorm_hist':train_global_gradnorm_hist,
                 'train_covmat_fro_loss_hist':train_covmat_fro_loss_hist,
+                'rho_res_hist':rho_res_hist,
+                'alpha_hist':alpha_hist,
+                'omega_in_hist':omega_in_hist,
             }))
             
         if normalize_dataset == True:
@@ -584,11 +613,118 @@ def trainAERNN(
         legend_list=['global_gradnorm'],
         xlabel='Epoch',
         ylabel='gradnorm',
+        plot_type='plot',
     )
     plt.savefig(dir_name_plot+'/train_global_gradnorm_history-{}_outsteps.png'.format(num_outsteps), dpi=300, bbox_inches='tight')
     plt.show()
     plt.clf()
-    
+
+    if len(rho_res_hist) > 0:
+        temp = [[elem for elem in lst] for lst in rho_res_hist[0]]
+        for i in range(1, len(rho_res_hist)):
+            for j in range(len(temp)):
+                temp[j].extend(rho_res_hist[i][j])
+                
+        arr1 = temp[0]
+        arr2 = None
+        if len(temp) > 1:
+            arr2 = temp[1]
+        remaining_arrs = []
+        more_plot_arrs_kwargs = []
+        if len(temp) > 2:
+            remaining_arrs = temp[2:]
+            more_plot_arrs_kwargs = [{'linewidth':0.9}]*(len(temp) - 2)
+        fig, ax = plot_losses(
+            training_loss=arr1,
+            val_loss=arr2,
+            lr_change=lr_change,
+            learning_rate_list=learning_rate_list,
+            legend_list=['Layer {}'.format(i+1) for i in range(len(AR_AERNN_net.rnn_net.rnn_list))],
+            xlabel='Epoch',
+            ylabel=r'$\rho$',
+            traininglossplot_args=[],
+            traininglossplot_kwargs={'linewidth':0.9},
+            vallossplot_args=[],
+            vallossplot_kwargs={'linewidth':0.9},
+            more_plot_arrs_args=[],
+            more_plot_arrs_kwargs=more_plot_arrs_kwargs,
+            plot_type='plot',
+        )
+        plt.savefig(dir_name_plot+'/rho_res_history-{}_outsteps.png'.format(num_outsteps), dpi=300, bbox_inches='tight')
+        plt.show()
+        plt.clf()
+
+    if len(alpha_hist) > 0:
+        temp = [[elem for elem in lst] for lst in alpha_hist[0]]
+        for i in range(1, len(alpha_hist)):
+            for j in range(len(temp)):
+                temp[j].extend(alpha_hist[i][j])
+                
+        arr1 = temp[0]
+        arr2 = None
+        if len(temp) > 1:
+            arr2 = temp[1]
+        remaining_arrs = []
+        more_plot_arrs_kwargs = []
+        if len(temp) > 2:
+            remaining_arrs = temp[2:]
+            more_plot_arrs_kwargs = [{'linewidth':0.9}]*(len(temp) - 2)
+        fig, ax = plot_losses(
+            training_loss=arr1,
+            val_loss=arr2,
+            lr_change=lr_change,
+            learning_rate_list=learning_rate_list,
+            legend_list=['Layer {}'.format(i+1) for i in range(len(AR_AERNN_net.rnn_net.rnn_list))],
+            xlabel='Epoch',
+            ylabel=r'$\alpha$',
+            traininglossplot_args=[],
+            traininglossplot_kwargs={'linewidth':0.9},
+            vallossplot_args=[],
+            vallossplot_kwargs={'linewidth':0.9},
+            more_plot_arrs_args=[],
+            more_plot_arrs_kwargs=more_plot_arrs_kwargs,
+            plot_type='plot',
+        )
+        plt.savefig(dir_name_plot+'/alpha_history-{}_outsteps.png'.format(num_outsteps), dpi=300, bbox_inches='tight')
+        plt.show()
+        plt.clf()
+
+    if len(omega_in_hist) > 0:
+        temp = [[elem for elem in lst] for lst in omega_in_hist[0]]
+        for i in range(1, len(omega_in_hist)):
+            for j in range(len(temp)):
+                temp[j].extend(omega_in_hist[i][j])
+                
+        arr1 = temp[0]
+        arr2 = None
+        if len(temp) > 1:
+            arr2 = temp[1]
+        remaining_arrs = []
+        more_plot_arrs_kwargs = []
+        if len(temp) > 2:
+            remaining_arrs = temp[2:]
+            more_plot_arrs_kwargs = [{'linewidth':0.9}]*(len(temp) - 2)
+        fig, ax = plot_losses(
+            training_loss=arr1,
+            val_loss=arr2,
+            lr_change=lr_change,
+            learning_rate_list=learning_rate_list,
+            legend_list=['Layer {}'.format(i+1) for i in range(len(AR_AERNN_net.rnn_net.rnn_list))],
+            xlabel='Epoch',
+            ylabel=r'$\Omega_{in}$',
+            traininglossplot_args=[],
+            traininglossplot_kwargs={'linewidth':0.9},
+            vallossplot_args=[],
+            vallossplot_kwargs={'linewidth':0.9},
+            more_plot_arrs_args=[],
+            more_plot_arrs_kwargs=more_plot_arrs_kwargs,
+            plot_type='plot',
+        )
+        plt.savefig(dir_name_plot+'/omega_in_history-{}_outsteps.png'.format(num_outsteps), dpi=300, bbox_inches='tight')
+        plt.show()
+        plt.clf()
+ 
+
     ### cleaning up
     del(training_data_rnn_input)
     del(training_data_rnn_output)

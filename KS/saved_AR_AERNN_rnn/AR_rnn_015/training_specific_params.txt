@@ -1,0 +1,1 @@
+{'learning_rate_list': [[1e-05], [2e-06], [1e-06]], 'epochs': [[1000], [1000], [1000]], 'patience': [[100], [100], [100]], 'min_delta': 1e-06, 'prng_seed': 42, 'train_split': 0.8, 'val_split': 0.1, 'batch_size': 32, 'fRMS': 0.0025, 'loss_weights': 0.98, 'stddev': 0.000826655924320221, 'covmat_lmda': 1e-05, 'freeze_layers': [[], [], []], 'clipnorm': None, 'lambda_reg': 1e-06}

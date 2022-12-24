@@ -1,6 +1,8 @@
 ################################################################################
 # Regular ESN with uniform/normal noise added to every input.  Using sparse    #
 # tensors to make storage easier and more efficient.                           #
+# Can add nonlinear activation function postWout and single_weights as the     #
+# layer.                                                                       #
 ################################################################################
 
 import os
@@ -40,32 +42,39 @@ class single_weights(layers.Layer):
 class ESN_Cell_trainableparams(layers.Layer):
     def __init__(
             self, omega_in, sparsity, rho_res, state_size, alpha=1.0,
-            usebias_Win=False, prng_seed=42, activation='tanh', **kwargs):
+            usebias_Win=False, prng_seed=42, activation='tanh', train_alpha=True,
+            train_rho_res=True, train_omega_in=True, **kwargs):
 
         super(ESN_Cell_trainableparams, self).__init__()
 
+        self.train_omega_in = train_omega_in
         self.omega_in_original = omega_in
         self.omega_in = tf.Variable(
             initial_value=omega_in,
-            trainable=True,
+            trainable=self.train_omega_in,
             name='omega_in',
             dtype='float32',
         )
+
         self.sparsity = sparsity
+        
+        self.train_rho_res = train_rho_res
         self.rho_res_original = rho_res
         self.rho_res = tf.Variable(
             initial_value=rho_res,
-            trainable=True,
+            trainable=self.train_rho_res,
             name='rho_res',
             dtype='float32',
             constraint=lambda t : tf.clip_by_value(t, 1e-3, 1.-1e-3)
         )
         self.input_size = None
         self.state_num_units = state_size
+        
+        self.train_alpha = train_alpha
         self.alpha_original = alpha
         self.alpha = tf.Variable(
             initial_value=alpha,
-            trainable=True,
+            trainable=self.train_alpha,
             name='alpha',
             dtype='float32',
             constraint=lambda t : tf.clip_by_value(t, 1e-3, 1.)
@@ -148,7 +157,7 @@ class ESN_Cell_trainableparams(layers.Layer):
     # @tf.function
     def call(self, inputs, states):
 
-        print(type(states), len(states), type(states[0]), len(states[0]), states[0])
+        # print(type(states), len(states), type(states[0]), len(states[0]), states[0])
         state = states[0]
         
         candidate_state = self.activation(self.rho_res * self.Wres(state) + self.omega_in * self.Win(inputs))
@@ -209,6 +218,9 @@ class ESN(Model):
             T_output=None,
             activation_post_Wout='linear',
             use_weights_post_dense=False,
+            # train_alpha=None,
+            # train_omega_in=None,
+            # train_rho_res=None,
             **kwargs,
             ):
         
@@ -236,6 +248,9 @@ class ESN(Model):
         self.T_output = T_output
         self.activation_post_Wout = activation_post_Wout
         self.use_weights_post_dense = use_weights_post_dense
+        self.train_alpha = kwargs.pop('train_alpha', None)
+        self.train_omega_in = kwargs.pop('train_omega_in', None)
+        self.train_rho_res = kwargs.pop('train_rho_res', None)
         if self.load_file is not None:
             with open(load_file, 'r') as f:
                 lines = f.readlines()
@@ -280,6 +295,12 @@ class ESN(Model):
                 self.activation_post_Wout = load_dict['activation_post_Wout']
             if 'use_weights_post_dense' in load_dict.keys():
                 self.use_weights_post_dense = load_dict['use_weights_post_dense']
+            if 'train_alpha' in load_dict.keys():
+                self.train_alpha = load_dict['train_alpha']
+            if 'train_rho_res' in load_dict.keys():
+                self.train_rho_res = load_dict['train_rho_res']
+            if 'train_omega_in' in load_dict.keys():
+                self.train_omega_in = load_dict['train_omega_in']
             
         self.num_rnn_layers = len(self.ESN_layers_units)
         
@@ -311,6 +332,12 @@ class ESN(Model):
                 'stddev':self.stddev
             }
 
+        if self.train_alpha == None:
+            self.train_alpha = [True]*len(self.ESN_layers_units)
+        if self.train_omega_in == None:
+            self.train_omega_in = [True]*len(self.ESN_layers_units)
+        if self.train_rho_res == None:
+            self.train_rho_res = [True]*len(self.ESN_layers_units)
 
         ### the ESN network
         self.rnn_list = [
@@ -324,6 +351,9 @@ class ESN(Model):
                     usebias_Win=self.usebias_Win[i],
                     prng_seed=self.prng_seed,
                     activation=self.ESN_cell_activations[i],
+                    train_alpha=self.train_alpha[i],
+                    train_rho_res=self.train_rho_res[i],
+                    train_omega_in=self.train_omega_in[i],
                 ),
                 return_sequences=True,
                 return_state=True,
@@ -351,7 +381,7 @@ class ESN(Model):
         self.post_Wout_activation = tf.keras.activations.get(self.activation_post_Wout)
         
         if self.use_weights_post_dense == True:
-            self.postWout = single_weights(w_regularizer=reg)
+            self.postWout = single_weights(w_regularizer=reg(self.lambda_reg))
 
         self.power_arr = np.ones(shape=self.ESN_layers_units[-1])
         self.power_arr[0::2] = 2
@@ -367,24 +397,24 @@ class ESN(Model):
 
         return
 
-    def build(self, input_shape):
+    # def build(self, input_shape):
 
-        if self.stateful:
-            input_shape_ESN = (None, )
-        else:
-            input_shape_ESN = (self.batch_size, )
-        input_shape_ESN = input_shape_ESN + tuple(input_shape[1:])
-        for rnnlayer in self.rnn_list:
-            rnnlayer.build(input_shape_ESN)
-            input_shape_ESN = input_shape_ESN[0:-1] + (rnnlayer.cell.state_num_units, )
+    #     if self.stateful:
+    #         input_shape_ESN = (None, )
+    #     else:
+    #         input_shape_ESN = (self.batch_size, )
+    #     input_shape_ESN = input_shape_ESN + tuple(input_shape[1:])
+    #     for rnnlayer in self.rnn_list:
+    #         rnnlayer.build(input_shape_ESN)
+    #         input_shape_ESN = input_shape_ESN[0:-1] + (rnnlayer.cell.state_num_units, )
 
-        self.Wout.build(input_shape_ESN)
-        # super(ESN, self).build(input_shape)
-        if self.use_weights_post_dense == True:
-            self.postWout.build(input_shape=[None, input_shape[-1]])
+    #     self.Wout.build(input_shape_ESN)
+    #     # super(ESN, self).build(input_shape)
+    #     if self.use_weights_post_dense == True:
+    #         self.postWout.build(input_shape=[None, input_shape[-1]])
         
-        super().build(input_shape)
-        self.built = True
+    #     super().build(input_shape)
+    #     self.built = True
 
     def _warmup(self, inputs, training=None, usenoiseflag=False, **kwargs):
         ### Initialize the ESN state.
@@ -549,6 +579,11 @@ class ESN(Model):
             'usebias_Wout':self.usebias_Wout,
             'in_steps':self.in_steps,
             'out_steps':self.out_steps,
+            'activation_post_Wout':self.activation_post_Wout,
+            'use_weights_post_dense':self.use_weights_post_dense,
+            'train_alpha':list(self.train_alpha),
+            'train_omega_in':list(self.train_omega_in),
+            'train_rho_res':list(self.train_rho_res),
         }
         with open(file_name, 'w') as f:
             f.write(str(class_dict))
