@@ -244,6 +244,7 @@ def trainAERNN(
                 T_output=T_sample_output,
                 stddev=stddev_rnn,
                 batch_size=batch_size,
+                lambda_reg=lambda_reg,
                 # stateful=stateful,
                 **rnn_kwargs,
             )
@@ -254,6 +255,7 @@ def trainAERNN(
             T_output=T_sample_output,
             stddev=stddev_rnn,
             batch_size=batch_size,
+            lambda_reg=lambda_reg,
             # stateful=stateful,
             **rnn_kwargs,
         )
