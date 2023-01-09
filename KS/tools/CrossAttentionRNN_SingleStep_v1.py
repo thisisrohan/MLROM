@@ -111,8 +111,10 @@ class CrossAttentionCell(layers.AbstractRNNCell):
             F, eta, ns,
             output_activation='linear',
             state_activation='linear',
+            nonlinear_expansion_activation='tanh',
             OutputAttn_regularizer=None,
             StateAttn_regularizer=None,
+            nonlinear_expansion_regularizer=None,          
             **kwargs
         ):
         self.F = F
@@ -120,8 +122,10 @@ class CrossAttentionCell(layers.AbstractRNNCell):
         self.ns = ns
         self.output_activation = output_activation
         self.state_activation = state_activation
+        self.nonlinear_expansion_activation = nonlinear_expansion_activation
         self.OutputAttn_regularizer = OutputAttn_regularizer
         self.StateAttn_regularizer = StateAttn_regularizer
+        self.nonlinear_expansion_regularizer = nonlinear_expansion_regularizer
         super(CrossAttentionCell, self).__init__(**kwargs)
         self.power = np.arange(1, 1+self.eta)
 
@@ -133,43 +137,66 @@ class CrossAttentionCell(layers.AbstractRNNCell):
         # matrices corressponding to the attention mechanism for the outputs
         self.OAttnMech_Wq = self.add_weight(
             shape=(self.eta, self.ns),
-            initializer='uniform',
+            # initializer='uniform',
             name='OutputCrossAttentionQueryMatrix',
             regularizer=self.OutputAttn_regularizer,
+            initializer=tf.keras.initializers.RandomNormal(),
         )
         self.OAttnMech_Wv = self.add_weight(
             shape=(self.eta, self.ns),
-            initializer='uniform',
+            # initializer='uniform',
             name='OutputCrossAttentionValueMatrix',
             regularizer=self.OutputAttn_regularizer,
+            initializer=tf.keras.initializers.RandomNormal(),
         )
+        # self.OAttnMech_Wv = self.add_weight(
+        #     shape=(self.ns, self.ns),
+        #     initializer='uniform',
+        #     name='OutputCrossAttentionValueMatrix',
+        #     regularizer=self.OutputAttn_regularizer,
+        #     initializer=tf.keras.initializers.RandomNormal(),
+        # )
         self.OAttnMech_Wk = self.add_weight(
             shape=(self.ns, self.ns),
-            initializer='uniform',
+            # initializer='uniform',
             name='OutputCrossAttentionKeyMatrix',
             regularizer=self.OutputAttn_regularizer,
+            initializer=tf.keras.initializers.RandomNormal(),
         )
         self.OActivation = layers.Activation(self.output_activation)
         # matrices corressponding to the attention mechanism for the state
         self.SAttnMech_Wq = self.add_weight(
             shape=(self.ns, self.ns),
-            initializer='uniform',
+            # initializer='uniform',
             name='StateCrossAttentionQueryMatrix',
             regularizer=self.StateAttn_regularizer,
+            initializer=tf.keras.initializers.RandomNormal(),
         )
         self.SAttnMech_Wv = self.add_weight(
             shape=(self.ns, self.ns),
-            initializer='uniform',
+            # initializer='uniform',
             name='StateCrossAttentionValueMatrix',
             regularizer=self.StateAttn_regularizer,
+            initializer=tf.keras.initializers.RandomNormal(),
         )
         self.SAttnMech_Wk = self.add_weight(
             shape=(self.eta, self.ns),
-            initializer='uniform',
+            # initializer='uniform',
             name='StateCrossAttentionKeyMatrix',
             regularizer=self.StateAttn_regularizer,
+            initializer=tf.keras.initializers.RandomNormal(),
         )
         self.SActivation = layers.Activation(self.state_activation)
+        
+        # matrices for the nonlinear expansion of the input
+        self.nonlinear_expansion = self.add_weight(
+            shape=(1, self.eta),
+            # initializer='uniform',
+            name='nonlinear_expansion',
+            regularizer=self.StateAttn_regularizer,
+            initializer=tf.keras.initializers.RandomNormal(),
+        )
+        self.nonlinear_expansion_activation_fn = layers.Activation(self.nonlinear_expansion_activation)
 
         self.built = True
 
@@ -178,22 +205,26 @@ class CrossAttentionCell(layers.AbstractRNNCell):
         if len(states.shape) == 1:
             states = tf.expand_dims(states, axis=0)
         states = tf.reshape(states, (states.shape[0], self.F, self.ns))
-        # data augmentation
+        ### data augmentation
         if len(inputs.shape) == 1:
             inputs = tf.expand_dims(inputs, axis=0)
         inputs = tf.expand_dims(inputs, axis=-1)
-        inputs = tf.tile(inputs, [1]*(len(inputs.shape)-1)+[self.eta])
-        inputs = tf.math.pow(inputs, self.power)
+        # inputs = tf.tile(inputs, [1]*(len(inputs.shape)-1)+[self.eta])
+        # inputs = tf.math.pow(inputs, self.power)
+        inputs = tf.linalg.matmul(inputs, self.nonlinear_expansion)
+        inputs = self.nonlinear_expansion_activation_fn(inputs)        
         
-        # output attention mechanism
+        
+        ### output attention mechanism
         OAttn_q = tf.linalg.matmul(inputs, self.OAttnMech_Wq)
         OAttn_v = tf.linalg.matmul(inputs, self.OAttnMech_Wv)
+        # OAttn_v = tf.linalg.matmul(states, self.OAttnMech_Wv)
         OAttn_k = tf.linalg.matmul(states, self.OAttnMech_Wk)
 
         output = []
         for i in range(inputs.shape[1]):
             gamma = OAttn_k * OAttn_q[:, i:i+1, :]
-            gamma = tf.math.reduce_sum(gamma, axis=-1) / self.ns**0.5
+            gamma = tf.math.reduce_sum(gamma, axis=-1) / self.ns
             gamma = tf.math.exp(gamma)
             gamma_sum = tf.math.reduce_sum(gamma, axis=-1, keepdims=True)
             weights_v = gamma / gamma_sum
@@ -212,7 +243,7 @@ class CrossAttentionCell(layers.AbstractRNNCell):
         new_states = []
         for i in range(states.shape[1]):
             gamma = SAttn_k * SAttn_q[:, i:i+1, :]
-            gamma = tf.math.reduce_sum(gamma, axis=-1) / self.ns**0.5
+            gamma = tf.math.reduce_sum(gamma, axis=-1) / self.ns
             gamma = tf.math.exp(gamma)
             gamma_sum = tf.math.reduce_sum(gamma, axis=-1, keepdims=True)
             weights_v = gamma / gamma_sum
@@ -225,6 +256,7 @@ class CrossAttentionCell(layers.AbstractRNNCell):
         new_states = self.SActivation(new_states)
 
         return output, (new_states)
+        # return output, (output)
 
 
 class RNN_CrossAttention(Model):
@@ -255,6 +287,7 @@ class RNN_CrossAttention(Model):
             ns=None,
             cell_output_activation='linear',
             cell_state_activation='linear',
+            cell_nonlinear_expansion_activation='tanh',
             **kwargs):
         
         super(RNN_CrossAttention, self).__init__()
@@ -281,6 +314,7 @@ class RNN_CrossAttention(Model):
         self.ns = ns
         self.cell_output_activation = cell_output_activation
         self.cell_state_activation = cell_state_activation
+        self.cell_nonlinear_expansion_activation = cell_nonlinear_expansion_activation
         if self.load_file is not None:
             with open(load_file, 'r') as f:
                 lines = f.readlines()
@@ -325,6 +359,8 @@ class RNN_CrossAttention(Model):
                 self.cell_output_activation = load_dict['cell_output_activation']
             if 'cell_state_activation' in load_dict.keys():
                 self.cell_state_activation = load_dict['cell_state_activation']
+            if 'cell_nonlinear_expansion_activation' in load_dict.keys():
+                self.cell_nonlinear_expansion_activation = load_dict['cell_nonlinear_expansion_activation']
         self.num_rnn_layers = len(self.rnn_layers_units)
 
         # self.zoneout_rate = min(1.0, max(0.0, self.zoneout_rate))
@@ -369,8 +405,10 @@ class RNN_CrossAttention(Model):
                     ns=self.ns,
                     output_activation=self.cell_output_activation,
                     state_activation=self.cell_state_activation,
+                    nonlinear_expansion_activation=self.cell_nonlinear_expansion_activation,
                     OutputAttn_regularizer=reg(self.lambda_reg),
                     StateAttn_regularizer=reg(self.lambda_reg),
+                    nonlinear_expansion_regularizer=reg(self.lambda_reg),
                 ),
                 return_sequences=True,
                 stateful=self.stateful,
@@ -512,6 +550,7 @@ class RNN_CrossAttention(Model):
             'ns':self.ns,
             'cell_output_activation':self.cell_output_activation,
             'cell_state_activation':self.cell_state_activation,
+            'cell_nonlinear_expansion_activation':self.cell_nonlinear_expansion_activation,
         }
         with open(file_name, 'w') as f:
             f.write(str(class_dict))
@@ -527,7 +566,7 @@ class RNN_CrossAttention(Model):
         self.save_class_dict(file_name+'_class_dict.txt')
 
         ### saving weights
-        self.save_model_weights(file_name+'_gru_weights', H5=H5)
+        self.save_model_weights(file_name+'_crossattentioncell_weights', H5=H5)
 
         return
 

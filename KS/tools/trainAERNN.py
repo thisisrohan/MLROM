@@ -483,18 +483,18 @@ def trainAERNN(
             
             if 'rho_res_0' in history.history.keys():
                 temp = []
-                for i in range(len(AR_AERNN_net.rnn_net.rnn_list)):
-                    temp.append(history.history['rho_res_{}'.format(i)])
+                for jj in range(len(AR_AERNN_net.rnn_net.rnn_list)):
+                    temp.append(history.history['rho_res_{}'.format(jj)])
                 rho_res_hist.append(temp)
             if 'alpha_0' in history.history.keys():
                 temp = []
-                for i in range(len(AR_AERNN_net.rnn_net.rnn_list)):
-                    temp.append(history.history['alpha_{}'.format(i)])
+                for jj in range(len(AR_AERNN_net.rnn_net.rnn_list)):
+                    temp.append(history.history['alpha_{}'.format(jj)])
                 alpha_hist.append(temp)
             if 'omega_in_0' in history.history.keys():
                 temp = []
-                for i in range(len(AR_AERNN_net.rnn_net.rnn_list)):
-                    temp.append(history.history['omega_in_{}'.format(i)])
+                for jj in range(len(AR_AERNN_net.rnn_net.rnn_list)):
+                    temp.append(history.history['omega_in_{}'.format(jj)])
                 omega_in_hist.append(temp)
 
             if i == starting_lr_idx:
@@ -639,6 +639,7 @@ def trainAERNN(
         fig, ax = plot_losses(
             training_loss=arr1,
             val_loss=arr2,
+            more_plot_arrs_lst=remaining_arrs,
             lr_change=lr_change,
             learning_rate_list=learning_rate_list,
             legend_list=['Layer {}'.format(i+1) for i in range(len(AR_AERNN_net.rnn_net.rnn_list))],
@@ -674,6 +675,7 @@ def trainAERNN(
         fig, ax = plot_losses(
             training_loss=arr1,
             val_loss=arr2,
+            more_plot_arrs_lst=remaining_arrs,
             lr_change=lr_change,
             learning_rate_list=learning_rate_list,
             legend_list=['Layer {}'.format(i+1) for i in range(len(AR_AERNN_net.rnn_net.rnn_list))],
@@ -709,6 +711,7 @@ def trainAERNN(
         fig, ax = plot_losses(
             training_loss=arr1,
             val_loss=arr2,
+            more_plot_arrs_lst=remaining_arrs,
             lr_change=lr_change,
             learning_rate_list=learning_rate_list,
             legend_list=['Layer {}'.format(i+1) for i in range(len(AR_AERNN_net.rnn_net.rnn_list))],

@@ -254,7 +254,7 @@ class RNN_GRU(Model):
             )
         ]
         if self.num_skip_connections > 0:
-            self.RK_RNNCell = cell=GRUCell_zoneout(
+            self.RK_RNNCell = GRUCell_zoneout(
                 units=self.rnn_layers_units[1],
                 kernel_regularizer=reg(self.lambda_reg),
                 bias_regularizer=reg(self.lambda_reg),

@@ -166,8 +166,8 @@ class AR_RNN_GRU(Model):
                 self.data_dim = load_dict['data_dim']
             if 'dt_rnn' in load_dict.keys():
                 self.dt_rnn = load_dict['dt_rnn']
-            if 'lambda_reg' in load_dict.keys():
-                self.lambda_reg = load_dict['lambda_reg']
+            # if 'lambda_reg' in load_dict.keys():
+            #     self.lambda_reg = load_dict['lambda_reg']
             if 'reg_name' in load_dict.keys():
                 self.reg_name = load_dict['reg_name']
             if 'rnn_layers_units' in load_dict.keys():

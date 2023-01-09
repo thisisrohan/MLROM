@@ -194,6 +194,7 @@ def create_CDV_data(
     for ii in range(params_mat.shape[0]):
         # setting up internal vectors and parameters
         params = params_mat[ii, :]
+        init_state = init_state_mat[ii, :]
         if return_params_arr == True:
             params_arr[counter, :] = params[:]
 
