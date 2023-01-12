@@ -275,7 +275,7 @@ def trainAERNN(
         optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate_list[0]),
         loss=tf.keras.losses.MeanSquaredError(),
         run_eagerly=False,
-        loss_weights=loss_weights,
+        # loss_weights=loss_weights,
         metrics='mse'
     )
 

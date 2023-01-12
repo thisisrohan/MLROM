@@ -218,20 +218,25 @@ class Autoencoder(Model):
         x, y, sample_weight = data_adapter.unpack_x_y_sample_weight(data)
 
         with tf.GradientTape() as tape1:
-            with tf.GradientTape() as tape2:
+            with tf.GradientTape(watch_accessed_variables=False) as tape2:
+                tape2.watch(x)
+                tape2.watch(self.trainable_variables)
                 encoded = self.encoder_net(x, training=True)
             ls_jacobian = tape2.batch_jacobian(encoded, x)
+            # ls_norm = tf.norm(encoded, axis=-1)
+            
+            ls_jacobian_norm = tf.reduce_mean(tf.norm(
+                ls_jacobian,
+                ord='fro',
+                axis=[-2, -1]
+            ))# / ls_norm)
             decoded = self.decoder_net(encoded, training=True)
             loss = self.compiled_loss(
                 y,
                 decoded,
                 sample_weight,
                 regularization_losses=self.losses
-            ) + self.contractive_lmda*tf.norm(
-                ls_jacobian,
-                ord='fro',
-                axis=[-2, -1]
-            )
+            ) + self.contractive_lmda*ls_jacobian_norm
 
         self._validate_target_and_loss(decoded, loss)
 
@@ -240,7 +245,12 @@ class Autoencoder(Model):
         
         self.optimizer.apply_gradients(zip(gradients, trainable_vars))
         
-        return self.compute_metrics(x, y, decoded, sample_weight)
+        return self.compute_metrics(x, y, decoded, sample_weight, ls_jacobian_norm=ls_jacobian_norm)
+        
+    def compute_metrics(self, x, y, decoded, sample_weight, ls_jacobian_norm=-1.0):
+        metric_results = super().compute_metrics(x, y, decoded, sample_weight)
+        metric_results['ls_jacobian_norm'] = ls_jacobian_norm
+        return metric_results
     
 
     @tf.function

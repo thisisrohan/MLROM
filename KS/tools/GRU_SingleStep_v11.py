@@ -245,6 +245,7 @@ class RNN_GRU(Model):
                     units=self.rnn_layers_units[0],
                     kernel_regularizer=reg(self.lambda_reg),
                     bias_regularizer=reg(self.lambda_reg),
+                    recurrent_regularizer=reg(self.lambda_reg),
                     zoneout_rate=self.zoneout_rate,
                     dropout=self.rnncell_dropout_rate,
                 ),
@@ -258,6 +259,7 @@ class RNN_GRU(Model):
                 units=self.rnn_layers_units[1],
                 kernel_regularizer=reg(self.lambda_reg),
                 bias_regularizer=reg(self.lambda_reg),
+                recurrent_regularizer=reg(self.lambda_reg),
                 zoneout_rate=self.zoneout_rate,
                 dropout=self.rnncell_dropout_rate,
             )
