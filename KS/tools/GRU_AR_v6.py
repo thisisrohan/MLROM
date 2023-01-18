@@ -181,7 +181,7 @@ class AR_RNN_GRU(Model):
         if self.load_file is not None:
             with open(load_file, 'r') as f:
                 lines = f.readlines()
-            load_dict = eval(lines[0])
+            load_dict = eval(''.join(lines))
             if 'data_dim' in load_dict.keys():
                 self.data_dim = load_dict['data_dim']
             if 'dt_rnn' in load_dict.keys():

@@ -134,6 +134,7 @@ class AR_RNN_GRU(Model):
             denselayer_dropout_rate=0.0,
             batch_size=1,
             use_weights_post_dense=False,
+            use_trainable_weights_with_reslayers=False,
             **kwargs):
         
         super(AR_RNN_GRU, self).__init__()
@@ -158,10 +159,11 @@ class AR_RNN_GRU(Model):
         self.use_weights_post_dense = use_weights_post_dense
         self.T_input = T_input
         self.T_output = T_output
+        self.use_trainable_weights_with_reslayers = use_trainable_weights_with_reslayers
         if self.load_file is not None:
             with open(load_file, 'r') as f:
                 lines = f.readlines()
-            load_dict = eval(lines[0])
+            load_dict = eval(''.join(lines))
             if 'data_dim' in load_dict.keys():
                 self.data_dim = load_dict['data_dim']
             if 'dt_rnn' in load_dict.keys():
@@ -198,6 +200,8 @@ class AR_RNN_GRU(Model):
                 self.out_steps = int(load_dict['out_steps'])
             if 'in_steps' in load_dict.keys():
                 self.in_steps = int(load_dict['in_steps'])
+            if 'use_trainable_weights_with_reslayers' in load_dict.keys():
+                self.use_trainable_weights_with_reslayers = load_dict['use_trainable_weights_with_reslayers']
 
         self.num_rnn_layers = len(self.rnn_layers_units)
 
@@ -309,6 +313,15 @@ class AR_RNN_GRU(Model):
                     shape=(self.batch_size, 1, self.rnn_layers_units[i]),
                     dtype='float32'
                 )
+                
+        if self.use_trainable_weights_with_reslayers == True:
+            self.reslayer_factor = [tf.Variable(
+                initial_value=1.0,
+                trainable=True,
+                name="reslayer_weight_{}".format(i)
+            ) for i in range(self.num_skip_connections)]
+        else:
+            self.reslayer_factor = [1.0]*self.num_skip_connections
 
         ### initializing weights
         # temp = tf.ones(shape=[self.batch_size, 1, self.data_dim])
@@ -339,7 +352,7 @@ class AR_RNN_GRU(Model):
                 training=training,
             )
             states_list.append(states)
-            x = x + prediction
+            x = x + self.reslayer_factor[i]*prediction
 
         # doing the final weighted sum of the intermediate predictions
         output = x[:, -1:, :]
@@ -370,7 +383,7 @@ class AR_RNN_GRU(Model):
                 training=training,
             )
             states_list[i+1] = (states)
-            x = x + prediction
+            x = x + self.reslayer_factor[i]*prediction
         
         x = x[:, -1:, :]
         # running through the final dense layers
@@ -495,6 +508,7 @@ class AR_RNN_GRU(Model):
             'use_weights_post_dense':self.use_weights_post_dense,
             'in_steps':self.in_steps,
             'out_steps':self.out_steps,
+            'use_trainable_weights_with_reslayers':self.use_trainable_weights_with_reslayers,
         }
         with open(file_name, 'w') as f:
             f.write(str(class_dict))

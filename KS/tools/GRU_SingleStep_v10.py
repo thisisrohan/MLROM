@@ -128,6 +128,7 @@ class RNN_GRU(Model):
             denselayer_dropout_rate=0.0,
             batch_size=1,
             use_weights_post_dense=False,
+            use_trainable_weights_with_reslayers=False,
             **kwargs):
         
         super(RNN_GRU, self).__init__()
@@ -150,10 +151,11 @@ class RNN_GRU(Model):
         self.rnncell_dropout_rate = rnncell_dropout_rate
         self.denselayer_dropout_rate = denselayer_dropout_rate
         self.use_weights_post_dense = use_weights_post_dense
+        self.use_trainable_weights_with_reslayers = use_trainable_weights_with_reslayers
         if self.load_file is not None:
             with open(load_file, 'r') as f:
                 lines = f.readlines()
-            load_dict = eval(lines[0])
+            load_dict = eval(''.join(lines))
             if 'data_dim' in load_dict.keys():
                 self.data_dim = load_dict['data_dim']
             if 'dt_rnn' in load_dict.keys():
@@ -186,6 +188,8 @@ class RNN_GRU(Model):
                 self.denselayer_dropout_rate = load_dict['denselayer_dropout_rate']
             if 'rnncell_dropout_rate' in load_dict.keys():
                 self.rnncell_dropout_rate = load_dict['rnncell_dropout_rate']
+            if 'use_trainable_weights_with_reslayers' in load_dict.keys():
+                self.use_trainable_weights_with_reslayers = load_dict['use_trainable_weights_with_reslayers']
         self.num_rnn_layers = len(self.rnn_layers_units)
 
         self.zoneout_rate = min(1.0, max(0.0, self.zoneout_rate))
@@ -282,6 +286,15 @@ class RNN_GRU(Model):
                     dtype='float32'
                 )
 
+        if self.use_trainable_weights_with_reslayers == True:
+            self.reslayer_factor = [tf.Variable(
+                initial_value=1.0,
+                trainable=True,
+                name="reslayer_weight_{}".format(i)
+            ) for i in range(self.num_skip_connections)]
+        else:
+            self.reslayer_factor = [1.0]*self.num_skip_connections
+
         ### initializing weights
         # temp = tf.ones(shape=[self.batch_size, 1, self.data_dim])
         # temp = self.predict(temp)
@@ -316,7 +329,7 @@ class RNN_GRU(Model):
                 # initial_state=init_state_j,
                 training=training,
             )
-            x = x + prediction
+            x = x + self.reslayer_factor[j-1]*prediction
             # if self.stateful == True:
             #    self.init_state[j] = None # so that future batches don't use the initial state
         
@@ -367,6 +380,7 @@ class RNN_GRU(Model):
             'rnncell_dropout_rate':self.rnncell_dropout_rate,
             'denselayer_dropout_rate':self.denselayer_dropout_rate,
             'use_weights_post_dense':self.use_weights_post_dense,
+            'use_trainable_weights_with_reslayers':self.use_trainable_weights_with_reslayers,
         }
         with open(file_name, 'w') as f:
             f.write(str(class_dict))
