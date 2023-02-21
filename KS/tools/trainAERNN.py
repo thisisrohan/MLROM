@@ -79,10 +79,16 @@ def trainAERNN(
     global_clipnorm = kwargs.pop('global_clipnorm', None)
     ESN_flag = kwargs.pop('ESN_flag', False)
     rnn_kwargs = kwargs.pop('rnn_kwargs', {})
+    use_ae_data = kwargs.pop('use_ae_data', True)
 
     ### create autoencoder and load weights
-    ae_net = Autoencoder(all_data.shape[1], load_file=load_file_ae)
-    ae_net.load_weights_from_file(wt_file_ae)
+    if use_ae_data == True:
+        ae_net = Autoencoder(all_data.shape[1], load_file=load_file_ae)
+        ae_net.load_weights_from_file(wt_file_ae)
+    else:
+        ae_net = None
+        normalization_constant_arr_aedata = normalization_constant_arr_rnndata
+        normalization_constant_arr_rnndata = None
 
     ### Creating data for AE-RNN and doing some statistics
     time_mean_ogdata = np.mean(all_data, axis=0)

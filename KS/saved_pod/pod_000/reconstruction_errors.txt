@@ -1,0 +1,2 @@
+reconstruction MSE (training data) : 0.0012159963371232152
+reconstruction MSE (testing data) : 0.001222065300680697

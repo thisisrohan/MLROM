@@ -1,0 +1,1 @@
+{'learning_rate_list': [0.0005, 5e-05, 5e-06], 'epochs': 2000, 'patience': 100, 'min_delta': 1e-06, 'prng_seed': 42, 'train_split': 0.8, 'val_split': 0.1, 'batch_size': 32, 'fRMS': 0.01, 'timeMeanofSpaceRMS': 0.3312899, 'stddev': 0.0033330750465393067, 'dropout_rate': 0.0, 'cov_lmda': 1e-05}

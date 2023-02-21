@@ -142,7 +142,8 @@ class RNN_GRU(Model):
             denselayer_dropout_rate=0.0,
             batch_size=1,
             scalar_weights=None,
-            use_weights_post_dense=False,):
+            use_weights_post_dense=False,
+            **kwargs):
         
         super(RNN_GRU, self).__init__()
 

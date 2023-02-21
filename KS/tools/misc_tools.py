@@ -548,6 +548,23 @@ def create_data_for_RNN(
                     normalization_arr[0, i] = sample_mean
                     normalization_arr[1, i] = stddev_multiplier*sample_std
                 return normalization_arr
+                
+            def global_stddev(data, **kwargs):
+                stddev_multiplier = kwargs.pop('stddev_multiplier', None)
+                norm_arr_upto_that_point = kwargs.pop('normalization_arr', None)
+                normalization_arr = np.empty(shape=(2, data.shape[1]), dtype=FTYPE)
+                if stddev_multiplier is None:
+                    stddev_multiplier = 1.414213
+                sample_std_all = np.mean(np.std(data, axis=0))
+                for i in range(data.shape[1]):
+                    sample_mean = np.mean(data[:, i])
+                    sample_std = sample_std_all
+                    if type(norm_arr_upto_that_point) != type(None):
+                        sample_mean = (sample_mean - norm_arr_upto_that_point[0, i])/norm_arr_upto_that_point[1, i]
+                        sample_std = sample_std / norm_arr_upto_that_point[1, i]
+                    normalization_arr[0, i] = sample_mean
+                    normalization_arr[1, i] = stddev_multiplier*sample_std
+                return normalization_arr
 
             def update_normalizationarr(norm_arr_upto_that_point, new_norm_arr):
                 if type(norm_arr_upto_that_point) == type(None):
@@ -561,6 +578,7 @@ def create_data_for_RNN(
                 'minmax' : minmax,
                 'minmax2' : minmax2,
                 'stddev' : stddev,
+                'global_stddev' : global_stddev,
             }
 
             normalization_arr = None

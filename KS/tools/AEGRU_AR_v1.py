@@ -54,20 +54,24 @@ class reverseNormalization_layer(layers.Layer):
     def __init__(self, normalization_arr):
         super(reverseNormalization_layer, self).__init__()
         self.normalization_arr = normalization_arr
-        self.alpha = tf.Variable(
-            initial_value=self.normalization_arr[0:1, :],
-            trainable=False,
-            name='alpha',
-            dtype='float32',
-            shape=(1, self.normalization_arr.shape[1])
-        )
-        self.beta = tf.Variable(
-            initial_value=self.normalization_arr[1:, :],
-            trainable=False,
-            name='beta',
-            dtype='float32',
-            shape=(1, self.normalization_arr.shape[1])
-        )
+        if type(self.normalization_arr) != type(None):
+            self.alpha = tf.Variable(
+                initial_value=self.normalization_arr[0:1, :],
+                trainable=False,
+                name='alpha',
+                dtype='float32',
+                shape=(1, self.normalization_arr.shape[1])
+            )
+            self.beta = tf.Variable(
+                initial_value=self.normalization_arr[1:, :],
+                trainable=False,
+                name='beta',
+                dtype='float32',
+                shape=(1, self.normalization_arr.shape[1])
+            )
+        else:
+            self.alpha = 0.0
+            self.beta = 1.0
 
     def call(self, inputs, training=None):
         # batch_size = inputs.shape[0]
@@ -80,20 +84,24 @@ class normalization_layer(layers.Layer):
     def __init__(self, normalization_arr):
         super(normalization_layer, self).__init__()
         self.normalization_arr = normalization_arr
-        self.alpha = tf.Variable(
-            initial_value=self.normalization_arr[0:1, :],
-            trainable=False,
-            name='alpha',
-            dtype='float32',
-            shape=(1, self.normalization_arr.shape[1])
-        )
-        self.beta = tf.Variable(
-            initial_value=self.normalization_arr[1:, :],
-            trainable=False,
-            name='beta',
-            dtype='float32',
-            shape=(1, self.normalization_arr.shape[1])
-        )
+        if type(self.normalization_arr) != type(None):
+            self.alpha = tf.Variable(
+                initial_value=self.normalization_arr[0:1, :],
+                trainable=False,
+                name='alpha',
+                dtype='float32',
+                shape=(1, self.normalization_arr.shape[1])
+            )
+            self.beta = tf.Variable(
+                initial_value=self.normalization_arr[1:, :],
+                trainable=False,
+                name='beta',
+                dtype='float32',
+                shape=(1, self.normalization_arr.shape[1])
+            )
+        else:
+            self.alpha = 0.0
+            self.beta = 1.0
 
     def call(self, inputs, training=None):
         # batch_size = inputs.shape[0]
@@ -101,6 +109,28 @@ class normalization_layer(layers.Layer):
         #     batch_size = 1
         return (inputs - self.alpha) / self.beta
 
+class pass_through_layer(layers.Layer):
+    def __init__(self, **kwargs):
+        super().__init__()
+        
+    def call(self, inputs, training=None):
+        return inputs
+
+
+class pass_through_ae_model(Model):
+    def __init__(self, **kwargs):
+        super().__init__()
+        self.encoder_net = pass_through_layer()
+        self.decoder_net = pass_through_layer()
+        
+    def call(self, inputs, training=None, **kwargs):
+        return inputs
+
+    def save_class_dict(self, *args, **kwargs):
+        return
+
+    def save_model_weights(self, *args, **kwargs):
+        return
 
 
 class AR_AERNN_GRU(Model):
@@ -135,6 +165,9 @@ class AR_AERNN_GRU(Model):
         self.loss_weights = loss_weights
         self.clipnorm = clipnorm
         self.global_clipnorm = global_clipnorm # if this is specified then specifying `clipnorm` has no effect
+        
+        if type(self.ae_net) == type(None):
+            self.ae_net = pass_through_ae_model()
 
         return
 
