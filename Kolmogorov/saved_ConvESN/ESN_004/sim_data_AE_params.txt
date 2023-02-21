@@ -1,0 +1,1 @@
+{'T': 25000.0, 'delta_t': 1.0, 'dir_name_ae': '/home/rkaushik/Documents/Thesis/MLROM/Kolmogorov/saved_ae/ae_013', 'normalize_dataset': True, 'stddev_multiplier': 3, 'use_ae_data': True}

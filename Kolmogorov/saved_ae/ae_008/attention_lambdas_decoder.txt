@@ -1,0 +1,2 @@
+i : 10, name : attention_module_3, lambda_att : 0.33794111013412476
+i : 16, name : attention_module_4, lambda_att : 0.5127939581871033

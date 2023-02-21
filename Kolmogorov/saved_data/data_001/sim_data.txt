@@ -1,0 +1,1 @@
+{'num_wavenumbers': 33, 'num_wavenumber_pairs': 16, 'Re': 30, 'dt': 0.01, 'dTr': 0.25, 'T_transient': 500, 'T': 25000, 'N_ref': 50}

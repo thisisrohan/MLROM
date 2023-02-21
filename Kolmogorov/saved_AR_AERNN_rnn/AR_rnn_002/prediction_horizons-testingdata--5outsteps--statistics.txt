@@ -1,0 +1,5 @@
+error_threshold = 0.5
+prediction_horizon : 0.7049545454545456, median : 0.65
+ph_min : 0.0, ph_max : 2.3075
+stddev : 0.49159445844135385, IQR : 0.52
+1st quartile : 0.35750000000000004, 3rd quartile : 0.8775000000000001
