@@ -87,14 +87,15 @@ class ESN_Cell(layers.Layer):
     
         shape = (self.state_num_units, self.state_num_units)
         
-        Wres = self.prng.uniform(low=-1, high=1, size=shape).astype('float32')
-        Wres *= (self.prng.random(size=shape) < 1 - self.sparsity)
-        
-        Wres = sp.csr_array(Wres)
+        # Wres = self.prng.uniform(low=-1, high=1, size=shape).astype('float32')
+        # Wres *= (self.prng.random(size=shape) < 1 - self.sparsity)
+        Wres = self.prng.random(size=shape) < 1 - self.sparsity
+        # Wres = Wres.astype('float32', copy=False)
+        Wres = sp.csr_array(Wres, dtype=np.float32)
+        Wres.data = self.prng.uniform(low=-1, high=1, size=Wres.data.shape).astype('float32', copy=False)
         spectral_rad = np.abs(sp_la.eigs(Wres, k=1, which='LM', return_eigenvectors=False))[0]
         
-        fac = self.rho_res / spectral_rad
-        Wres.data *= fac
+        Wres.data *= self.rho_res / spectral_rad
         # Wres *= fac
         Wres = Wres.tocoo()
         Wres = tf.sparse.SparseTensor(
@@ -102,8 +103,8 @@ class ESN_Cell(layers.Layer):
             values=Wres.data,
             dense_shape=Wres.shape,
         )
-        
-        return Wres #.astype('float32')
+
+        return Wres
 
     def build(self, input_shape):
     
@@ -313,6 +314,8 @@ class ESN(Model):
 
         self.power_arr = np.ones(shape=self.ESN_layers_units[-1])
         self.power_arr[0::2] = 2
+
+        self.ESN_layers = self.rnn_list
 
         # self.global_Hb = np.zeros(shape=[shape[0]]*2, dtype='float32')
         # self.global_Yb = np.zeros(shape=[self.data_dim, shape[0]], dtype='float32')
