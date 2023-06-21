@@ -1,0 +1,2 @@
+{'data_dir_idx': '008', 'normalizeforae_flag': True, 'normalization_constant_arr_aedata': array([[ 0.1919329 ,  0.19295387, 23.526415  ],
+       [23.75482   , 27.052578  , 25.936165  ]], dtype=float32), 'normalization_type': 'stddev', 'stddev_multiplier': 3, 'stddev_multiplier_pm': None, 'ae_data_with_params': False, 'module': 'tools.ae_v2'}

@@ -1,0 +1,1 @@
+{'epochs': 1, 'prng_seed': 42, 'train_split': 0.8, 'val_split': 0.1, 'batch_size': 1, 'timeMeanofSpaceRMS': 0.29314774, 'min_delta': 1e-06, 'patience': 5, 'use_best': False, 'degree_of_connectivity_x0': 3, 'fRMS': 0.03918194347141743, 'lambda_reg': 5.416754583247461e-07, 'stddev': 0.013060510422919936}
