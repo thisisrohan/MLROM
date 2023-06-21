@@ -1,0 +1,11 @@
+ENCODED VECTOR WEIGHTS
+----------------------
+i : 00 -- kernel_size : 03 -- 1.33675
+i : 01 -- kernel_size : 05 -- 1.01245
+i : 02 -- kernel_size : 07 -- 0.87445
+
+DECODED VECTOR WEIGHTS
+----------------------
+i : 00 -- kernel_size : 03 -- 0.66522
+i : 01 -- kernel_size : 05 -- 0.94798
+i : 02 -- kernel_size : 07 -- 0.99562

@@ -1,0 +1,71 @@
+Model: "model"
+_________________________________________________________________
+ Layer (type)                Output Shape              Param #   
+=================================================================
+ input_1 (InputLayer)        [(None, 2, 50, 50)]       0         
+                                                                 
+ gaussian_noise (GaussianNoi  (None, 2, 50, 50)        0         
+ se)                                                             
+                                                                 
+ periodic_padding (periodic_  (None, 2, 56, 56)        5600      
+ padding)                                                        
+                                                                 
+ conv2d (Conv2D)             (None, 8, 25, 25)         784       
+                                                                 
+ batch_normalization (BatchN  (None, 8, 25, 25)        32        
+ ormalization)                                                   
+                                                                 
+ activation (Activation)     (None, 8, 25, 25)         0         
+                                                                 
+ periodic_padding_1 (periodi  (None, 8, 31, 31)        1550      
+ c_padding)                                                      
+                                                                 
+ conv2d_1 (Conv2D)           (None, 16, 13, 13)        6272      
+                                                                 
+ batch_normalization_1 (Batc  (None, 16, 13, 13)       64        
+ hNormalization)                                                 
+                                                                 
+ activation_1 (Activation)   (None, 16, 13, 13)        0         
+                                                                 
+ periodic_padding_2 (periodi  (None, 16, 19, 19)       494       
+ c_padding)                                                      
+                                                                 
+ conv2d_2 (Conv2D)           (None, 32, 7, 7)          25088     
+                                                                 
+ batch_normalization_2 (Batc  (None, 32, 7, 7)         128       
+ hNormalization)                                                 
+                                                                 
+ activation_2 (Activation)   (None, 32, 7, 7)          0         
+                                                                 
+ periodic_padding_3 (periodi  (None, 32, 13, 13)       182       
+ c_padding)                                                      
+                                                                 
+ conv2d_3 (Conv2D)           (None, 10, 4, 4)          15680     
+                                                                 
+ batch_normalization_3 (Batc  (None, 10, 4, 4)         40        
+ hNormalization)                                                 
+                                                                 
+ activation_3 (Activation)   (None, 10, 4, 4)          0         
+                                                                 
+ periodic_padding_4 (periodi  (None, 10, 10, 10)       80        
+ c_padding)                                                      
+                                                                 
+ conv2d_4 (Conv2D)           (None, 3, 4, 4)           1470      
+                                                                 
+ batch_normalization_4 (Batc  (None, 3, 4, 4)          12        
+ hNormalization)                                                 
+                                                                 
+ activation_4 (Activation)   (None, 3, 4, 4)           0         
+                                                                 
+ tf.reshape (TFOpLambda)     (None, 48)                0         
+                                                                 
+ dense (Dense)               (None, 25)                1225      
+                                                                 
+ scalar_multiplication (scal  (None, 25)               1         
+ ar_multiplication)                                              
+                                                                 
+=================================================================
+Total params: 58,702
+Trainable params: 50,657
+Non-trainable params: 8,045
+_________________________________________________________________

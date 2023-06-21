@@ -1,0 +1,124 @@
+Model: "model_1"
+__________________________________________________________________________________________________
+ Layer (type)                   Output Shape         Param #     Connected to                     
+==================================================================================================
+ input_2 (InputLayer)           [(None, 2, 4, 4)]    0           []                               
+                                                                                                  
+ periodic_padding_8 (periodic_p  (None, 2, 8, 8)     64          ['input_2[0][0]']                
+ adding)                                                                                          
+                                                                                                  
+ periodic_padding_12 (periodic_  (None, 2, 10, 10)   80          ['input_2[0][0]']                
+ padding)                                                                                         
+                                                                                                  
+ conv2d_transpose (Conv2DTransp  (None, 32, 19, 19)  1600        ['periodic_padding_8[0][0]']     
+ ose)                                                                                             
+                                                                                                  
+ conv2d_transpose_4 (Conv2DTran  (None, 32, 25, 25)  3136        ['periodic_padding_12[0][0]']    
+ spose)                                                                                           
+                                                                                                  
+ cropping2d (Cropping2D)        (None, 32, 7, 7)     0           ['conv2d_transpose[0][0]']       
+                                                                                                  
+ cropping2d_4 (Cropping2D)      (None, 32, 7, 7)     0           ['conv2d_transpose_4[0][0]']     
+                                                                                                  
+ batch_normalization_8 (BatchNo  (None, 32, 7, 7)    128         ['cropping2d[0][0]']             
+ rmalization)                                                                                     
+                                                                                                  
+ batch_normalization_12 (BatchN  (None, 32, 7, 7)    128         ['cropping2d_4[0][0]']           
+ ormalization)                                                                                    
+                                                                                                  
+ activation_8 (Activation)      (None, 32, 7, 7)     0           ['batch_normalization_8[0][0]']  
+                                                                                                  
+ activation_12 (Activation)     (None, 32, 7, 7)     0           ['batch_normalization_12[0][0]'] 
+                                                                                                  
+ periodic_padding_9 (periodic_p  (None, 32, 11, 11)  154         ['activation_8[0][0]']           
+ adding)                                                                                          
+                                                                                                  
+ periodic_padding_13 (periodic_  (None, 32, 13, 13)  182         ['activation_12[0][0]']          
+ padding)                                                                                         
+                                                                                                  
+ conv2d_transpose_1 (Conv2DTran  (None, 16, 25, 25)  12800       ['periodic_padding_9[0][0]']     
+ spose)                                                                                           
+                                                                                                  
+ conv2d_transpose_5 (Conv2DTran  (None, 16, 31, 31)  25088       ['periodic_padding_13[0][0]']    
+ spose)                                                                                           
+                                                                                                  
+ cropping2d_1 (Cropping2D)      (None, 16, 13, 13)   0           ['conv2d_transpose_1[0][0]']     
+                                                                                                  
+ cropping2d_5 (Cropping2D)      (None, 16, 13, 13)   0           ['conv2d_transpose_5[0][0]']     
+                                                                                                  
+ batch_normalization_9 (BatchNo  (None, 16, 13, 13)  64          ['cropping2d_1[0][0]']           
+ rmalization)                                                                                     
+                                                                                                  
+ batch_normalization_13 (BatchN  (None, 16, 13, 13)  64          ['cropping2d_5[0][0]']           
+ ormalization)                                                                                    
+                                                                                                  
+ activation_9 (Activation)      (None, 16, 13, 13)   0           ['batch_normalization_9[0][0]']  
+                                                                                                  
+ activation_13 (Activation)     (None, 16, 13, 13)   0           ['batch_normalization_13[0][0]'] 
+                                                                                                  
+ periodic_padding_10 (periodic_  (None, 16, 17, 17)  442         ['activation_9[0][0]']           
+ padding)                                                                                         
+                                                                                                  
+ periodic_padding_14 (periodic_  (None, 16, 19, 19)  494         ['activation_13[0][0]']          
+ padding)                                                                                         
+                                                                                                  
+ conv2d_transpose_2 (Conv2DTran  (None, 8, 37, 37)   3200        ['periodic_padding_10[0][0]']    
+ spose)                                                                                           
+                                                                                                  
+ conv2d_transpose_6 (Conv2DTran  (None, 8, 43, 43)   6272        ['periodic_padding_14[0][0]']    
+ spose)                                                                                           
+                                                                                                  
+ cropping2d_2 (Cropping2D)      (None, 8, 25, 25)    0           ['conv2d_transpose_2[0][0]']     
+                                                                                                  
+ cropping2d_6 (Cropping2D)      (None, 8, 25, 25)    0           ['conv2d_transpose_6[0][0]']     
+                                                                                                  
+ batch_normalization_10 (BatchN  (None, 8, 25, 25)   32          ['cropping2d_2[0][0]']           
+ ormalization)                                                                                    
+                                                                                                  
+ batch_normalization_14 (BatchN  (None, 8, 25, 25)   32          ['cropping2d_6[0][0]']           
+ ormalization)                                                                                    
+                                                                                                  
+ activation_10 (Activation)     (None, 8, 25, 25)    0           ['batch_normalization_10[0][0]'] 
+                                                                                                  
+ activation_14 (Activation)     (None, 8, 25, 25)    0           ['batch_normalization_14[0][0]'] 
+                                                                                                  
+ periodic_padding_11 (periodic_  (None, 8, 29, 29)   1450        ['activation_10[0][0]']          
+ padding)                                                                                         
+                                                                                                  
+ periodic_padding_15 (periodic_  (None, 8, 31, 31)   1550        ['activation_14[0][0]']          
+ padding)                                                                                         
+                                                                                                  
+ conv2d_transpose_3 (Conv2DTran  (None, 2, 61, 61)   400         ['periodic_padding_11[0][0]']    
+ spose)                                                                                           
+                                                                                                  
+ conv2d_transpose_7 (Conv2DTran  (None, 2, 67, 67)   784         ['periodic_padding_15[0][0]']    
+ spose)                                                                                           
+                                                                                                  
+ cropping2d_3 (Cropping2D)      (None, 2, 50, 50)    0           ['conv2d_transpose_3[0][0]']     
+                                                                                                  
+ cropping2d_7 (Cropping2D)      (None, 2, 50, 50)    0           ['conv2d_transpose_7[0][0]']     
+                                                                                                  
+ batch_normalization_11 (BatchN  (None, 2, 50, 50)   8           ['cropping2d_3[0][0]']           
+ ormalization)                                                                                    
+                                                                                                  
+ batch_normalization_15 (BatchN  (None, 2, 50, 50)   8           ['cropping2d_7[0][0]']           
+ ormalization)                                                                                    
+                                                                                                  
+ activation_11 (Activation)     (None, 2, 50, 50)    0           ['batch_normalization_11[0][0]'] 
+                                                                                                  
+ activation_15 (Activation)     (None, 2, 50, 50)    0           ['batch_normalization_15[0][0]'] 
+                                                                                                  
+ tf.math.multiply_2 (TFOpLambda  (None, 2, 50, 50)   0           ['activation_11[0][0]']          
+ )                                                                                                
+                                                                                                  
+ tf.math.multiply_3 (TFOpLambda  (None, 2, 50, 50)   0           ['activation_15[0][0]']          
+ )                                                                                                
+                                                                                                  
+ tf.__operators__.add_1 (TFOpLa  (None, 2, 50, 50)   0           ['tf.math.multiply_2[0][0]',     
+ mbda)                                                            'tf.math.multiply_3[0][0]']     
+                                                                                                  
+==================================================================================================
+Total params: 58,160
+Trainable params: 53,512
+Non-trainable params: 4,648
+__________________________________________________________________________________________________

@@ -1,0 +1,147 @@
+Model: "model"
+__________________________________________________________________________________________________
+ Layer (type)                   Output Shape         Param #     Connected to                     
+==================================================================================================
+ input_1 (InputLayer)           [(None, 2, 50, 50)]  0           []                               
+                                                                                                  
+ gaussian_noise (GaussianNoise)  (None, 2, 50, 50)   0           ['input_1[0][0]']                
+                                                                                                  
+ periodic_padding (periodic_pad  (None, 2, 52, 52)   5200        ['gaussian_noise[0][0]']         
+ ding)                                                                                            
+                                                                                                  
+ periodic_padding_4 (periodic_p  (None, 2, 54, 54)   5400        ['gaussian_noise[0][0]']         
+ adding)                                                                                          
+                                                                                                  
+ conv2d (Conv2D)                (None, 8, 25, 25)    144         ['periodic_padding[0][0]']       
+                                                                                                  
+ conv2d_4 (Conv2D)              (None, 8, 25, 25)    400         ['periodic_padding_4[0][0]']     
+                                                                                                  
+ periodic_padding_8 (periodic_p  (None, 2, 56, 56)   5600        ['gaussian_noise[0][0]']         
+ adding)                                                                                          
+                                                                                                  
+ batch_normalization (BatchNorm  (None, 8, 25, 25)   32          ['conv2d[0][0]']                 
+ alization)                                                                                       
+                                                                                                  
+ batch_normalization_4 (BatchNo  (None, 8, 25, 25)   32          ['conv2d_4[0][0]']               
+ rmalization)                                                                                     
+                                                                                                  
+ conv2d_8 (Conv2D)              (None, 8, 25, 25)    784         ['periodic_padding_8[0][0]']     
+                                                                                                  
+ activation (Activation)        (None, 8, 25, 25)    0           ['batch_normalization[0][0]']    
+                                                                                                  
+ activation_4 (Activation)      (None, 8, 25, 25)    0           ['batch_normalization_4[0][0]']  
+                                                                                                  
+ batch_normalization_8 (BatchNo  (None, 8, 25, 25)   32          ['conv2d_8[0][0]']               
+ rmalization)                                                                                     
+                                                                                                  
+ periodic_padding_1 (periodic_p  (None, 8, 27, 27)   1350        ['activation[0][0]']             
+ adding)                                                                                          
+                                                                                                  
+ periodic_padding_5 (periodic_p  (None, 8, 29, 29)   1450        ['activation_4[0][0]']           
+ adding)                                                                                          
+                                                                                                  
+ activation_8 (Activation)      (None, 8, 25, 25)    0           ['batch_normalization_8[0][0]']  
+                                                                                                  
+ conv2d_1 (Conv2D)              (None, 16, 13, 13)   1152        ['periodic_padding_1[0][0]']     
+                                                                                                  
+ conv2d_5 (Conv2D)              (None, 16, 13, 13)   3200        ['periodic_padding_5[0][0]']     
+                                                                                                  
+ periodic_padding_9 (periodic_p  (None, 8, 31, 31)   1550        ['activation_8[0][0]']           
+ adding)                                                                                          
+                                                                                                  
+ batch_normalization_1 (BatchNo  (None, 16, 13, 13)  64          ['conv2d_1[0][0]']               
+ rmalization)                                                                                     
+                                                                                                  
+ batch_normalization_5 (BatchNo  (None, 16, 13, 13)  64          ['conv2d_5[0][0]']               
+ rmalization)                                                                                     
+                                                                                                  
+ conv2d_9 (Conv2D)              (None, 16, 13, 13)   6272        ['periodic_padding_9[0][0]']     
+                                                                                                  
+ activation_1 (Activation)      (None, 16, 13, 13)   0           ['batch_normalization_1[0][0]']  
+                                                                                                  
+ activation_5 (Activation)      (None, 16, 13, 13)   0           ['batch_normalization_5[0][0]']  
+                                                                                                  
+ batch_normalization_9 (BatchNo  (None, 16, 13, 13)  64          ['conv2d_9[0][0]']               
+ rmalization)                                                                                     
+                                                                                                  
+ periodic_padding_2 (periodic_p  (None, 16, 15, 15)  390         ['activation_1[0][0]']           
+ adding)                                                                                          
+                                                                                                  
+ periodic_padding_6 (periodic_p  (None, 16, 17, 17)  442         ['activation_5[0][0]']           
+ adding)                                                                                          
+                                                                                                  
+ activation_9 (Activation)      (None, 16, 13, 13)   0           ['batch_normalization_9[0][0]']  
+                                                                                                  
+ conv2d_2 (Conv2D)              (None, 32, 7, 7)     4608        ['periodic_padding_2[0][0]']     
+                                                                                                  
+ conv2d_6 (Conv2D)              (None, 32, 7, 7)     12800       ['periodic_padding_6[0][0]']     
+                                                                                                  
+ periodic_padding_10 (periodic_  (None, 16, 19, 19)  494         ['activation_9[0][0]']           
+ padding)                                                                                         
+                                                                                                  
+ batch_normalization_2 (BatchNo  (None, 32, 7, 7)    128         ['conv2d_2[0][0]']               
+ rmalization)                                                                                     
+                                                                                                  
+ batch_normalization_6 (BatchNo  (None, 32, 7, 7)    128         ['conv2d_6[0][0]']               
+ rmalization)                                                                                     
+                                                                                                  
+ conv2d_10 (Conv2D)             (None, 32, 7, 7)     25088       ['periodic_padding_10[0][0]']    
+                                                                                                  
+ activation_2 (Activation)      (None, 32, 7, 7)     0           ['batch_normalization_2[0][0]']  
+                                                                                                  
+ activation_6 (Activation)      (None, 32, 7, 7)     0           ['batch_normalization_6[0][0]']  
+                                                                                                  
+ batch_normalization_10 (BatchN  (None, 32, 7, 7)    128         ['conv2d_10[0][0]']              
+ ormalization)                                                                                    
+                                                                                                  
+ periodic_padding_3 (periodic_p  (None, 32, 9, 9)    126         ['activation_2[0][0]']           
+ adding)                                                                                          
+                                                                                                  
+ periodic_padding_7 (periodic_p  (None, 32, 11, 11)  154         ['activation_6[0][0]']           
+ adding)                                                                                          
+                                                                                                  
+ activation_10 (Activation)     (None, 32, 7, 7)     0           ['batch_normalization_10[0][0]'] 
+                                                                                                  
+ conv2d_3 (Conv2D)              (None, 2, 4, 4)      576         ['periodic_padding_3[0][0]']     
+                                                                                                  
+ conv2d_7 (Conv2D)              (None, 2, 4, 4)      1600        ['periodic_padding_7[0][0]']     
+                                                                                                  
+ periodic_padding_11 (periodic_  (None, 32, 13, 13)  182         ['activation_10[0][0]']          
+ padding)                                                                                         
+                                                                                                  
+ batch_normalization_3 (BatchNo  (None, 2, 4, 4)     8           ['conv2d_3[0][0]']               
+ rmalization)                                                                                     
+                                                                                                  
+ batch_normalization_7 (BatchNo  (None, 2, 4, 4)     8           ['conv2d_7[0][0]']               
+ rmalization)                                                                                     
+                                                                                                  
+ conv2d_11 (Conv2D)             (None, 2, 4, 4)      3136        ['periodic_padding_11[0][0]']    
+                                                                                                  
+ activation_3 (Activation)      (None, 2, 4, 4)      0           ['batch_normalization_3[0][0]']  
+                                                                                                  
+ activation_7 (Activation)      (None, 2, 4, 4)      0           ['batch_normalization_7[0][0]']  
+                                                                                                  
+ batch_normalization_11 (BatchN  (None, 2, 4, 4)     8           ['conv2d_11[0][0]']              
+ ormalization)                                                                                    
+                                                                                                  
+ tf.math.multiply (TFOpLambda)  (None, 2, 4, 4)      0           ['activation_3[0][0]']           
+                                                                                                  
+ tf.math.multiply_1 (TFOpLambda  (None, 2, 4, 4)     0           ['activation_7[0][0]']           
+ )                                                                                                
+                                                                                                  
+ activation_11 (Activation)     (None, 2, 4, 4)      0           ['batch_normalization_11[0][0]'] 
+                                                                                                  
+ tf.__operators__.add (TFOpLamb  (None, 2, 4, 4)     0           ['tf.math.multiply[0][0]',       
+ da)                                                              'tf.math.multiply_1[0][0]']     
+                                                                                                  
+ tf.math.multiply_2 (TFOpLambda  (None, 2, 4, 4)     0           ['activation_11[0][0]']          
+ )                                                                                                
+                                                                                                  
+ tf.__operators__.add_1 (TFOpLa  (None, 2, 4, 4)     0           ['tf.__operators__.add[0][0]',   
+ mbda)                                                            'tf.math.multiply_2[0][0]']     
+                                                                                                  
+==================================================================================================
+Total params: 82,794
+Trainable params: 60,108
+Non-trainable params: 22,686
+__________________________________________________________________________________________________

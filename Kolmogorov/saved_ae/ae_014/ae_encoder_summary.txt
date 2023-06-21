@@ -1,0 +1,64 @@
+Model: "model"
+_________________________________________________________________
+ Layer (type)                Output Shape              Param #   
+=================================================================
+ input_1 (InputLayer)        [(None, 2, 50, 50)]       0         
+                                                                 
+ gaussian_noise (GaussianNoi  (None, 2, 50, 50)        0         
+ se)                                                             
+                                                                 
+ periodic_padding (periodic_  (None, 2, 54, 54)        5400      
+ padding)                                                        
+                                                                 
+ conv2d (Conv2D)             (None, 8, 25, 25)         400       
+                                                                 
+ batch_normalization (BatchN  (None, 8, 25, 25)        32        
+ ormalization)                                                   
+                                                                 
+ activation (Activation)     (None, 8, 25, 25)         0         
+                                                                 
+ periodic_padding_1 (periodi  (None, 8, 29, 29)        1450      
+ c_padding)                                                      
+                                                                 
+ conv2d_1 (Conv2D)           (None, 8, 13, 13)         1600      
+                                                                 
+ batch_normalization_1 (Batc  (None, 8, 13, 13)        32        
+ hNormalization)                                                 
+                                                                 
+ activation_1 (Activation)   (None, 8, 13, 13)         0         
+                                                                 
+ periodic_padding_2 (periodi  (None, 8, 17, 17)        442       
+ c_padding)                                                      
+                                                                 
+ conv2d_2 (Conv2D)           (None, 8, 7, 7)           1600      
+                                                                 
+ batch_normalization_2 (Batc  (None, 8, 7, 7)          32        
+ hNormalization)                                                 
+                                                                 
+ activation_2 (Activation)   (None, 8, 7, 7)           0         
+                                                                 
+ periodic_padding_3 (periodi  (None, 8, 11, 11)        154       
+ c_padding)                                                      
+                                                                 
+ conv2d_3 (Conv2D)           (None, 8, 4, 4)           1600      
+                                                                 
+ batch_normalization_3 (Batc  (None, 8, 4, 4)          32        
+ hNormalization)                                                 
+                                                                 
+ activation_3 (Activation)   (None, 8, 4, 4)           0         
+                                                                 
+ periodic_padding_4 (periodi  (None, 8, 8, 8)          64        
+ c_padding)                                                      
+                                                                 
+ conv2d_4 (Conv2D)           (None, 2, 4, 4)           400       
+                                                                 
+ batch_normalization_4 (Batc  (None, 2, 4, 4)          8         
+ hNormalization)                                                 
+                                                                 
+ activation_4 (Activation)   (None, 2, 4, 4)           0         
+                                                                 
+=================================================================
+Total params: 13,246
+Trainable params: 5,668
+Non-trainable params: 7,578
+_________________________________________________________________

@@ -1,0 +1,9 @@
+dir_name, kernel_size, use_attention, latent_state_shape
+ae_036, [3], False, (3, 3, 3)
+ae_038, [5], False, (3, 3, 3)
+ae_037, [7], False, (3, 3, 3)
+ae_035, [3 5 7], False, (3, 3, 3)
+ae_040, [3], True, (3, 3, 3)
+ae_041, [5], True, (3, 3, 3)
+ae_042, [7], True, (3, 3, 3)
+ae_039, [3 5 7], True, (3, 3, 3)

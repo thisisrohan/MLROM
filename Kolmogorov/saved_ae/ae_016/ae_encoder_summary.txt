@@ -1,0 +1,74 @@
+Model: "model_3"
+_________________________________________________________________
+ Layer (type)                Output Shape              Param #   
+=================================================================
+ input_4 (InputLayer)        [(None, 2, 50, 50)]       0         
+                                                                 
+ gaussian_noise_1 (GaussianN  (None, 2, 50, 50)        0         
+ oise)                                                           
+                                                                 
+ periodic_padding_12 (period  (None, 2, 54, 54)        5400      
+ ic_padding)                                                     
+                                                                 
+ conv2d_6 (Conv2D)           (None, 8, 25, 25)         400       
+                                                                 
+ batch_normalization_12 (Bat  (None, 8, 25, 25)        32        
+ chNormalization)                                                
+                                                                 
+ activation_12 (Activation)  (None, 8, 25, 25)         0         
+                                                                 
+ periodic_padding_13 (period  (None, 8, 29, 29)        1450      
+ ic_padding)                                                     
+                                                                 
+ conv2d_7 (Conv2D)           (None, 16, 13, 13)        3200      
+                                                                 
+ batch_normalization_13 (Bat  (None, 16, 13, 13)       64        
+ chNormalization)                                                
+                                                                 
+ activation_13 (Activation)  (None, 16, 13, 13)        0         
+                                                                 
+ periodic_padding_14 (period  (None, 16, 17, 17)       442       
+ ic_padding)                                                     
+                                                                 
+ conv2d_8 (Conv2D)           (None, 32, 7, 7)          12800     
+                                                                 
+ batch_normalization_14 (Bat  (None, 32, 7, 7)         128       
+ chNormalization)                                                
+                                                                 
+ activation_14 (Activation)  (None, 32, 7, 7)          0         
+                                                                 
+ periodic_padding_15 (period  (None, 32, 11, 11)       154       
+ ic_padding)                                                     
+                                                                 
+ conv2d_9 (Conv2D)           (None, 16, 4, 4)          12800     
+                                                                 
+ batch_normalization_15 (Bat  (None, 16, 4, 4)         64        
+ chNormalization)                                                
+                                                                 
+ activation_15 (Activation)  (None, 16, 4, 4)          0         
+                                                                 
+ periodic_padding_16 (period  (None, 16, 8, 8)         64        
+ ic_padding)                                                     
+                                                                 
+ conv2d_10 (Conv2D)          (None, 6, 4, 4)           2400      
+                                                                 
+ batch_normalization_16 (Bat  (None, 6, 4, 4)          24        
+ chNormalization)                                                
+                                                                 
+ activation_16 (Activation)  (None, 6, 4, 4)           0         
+                                                                 
+ periodic_padding_17 (period  (None, 6, 8, 8)          64        
+ ic_padding)                                                     
+                                                                 
+ conv2d_11 (Conv2D)          (None, 2, 4, 4)           300       
+                                                                 
+ batch_normalization_17 (Bat  (None, 2, 4, 4)          8         
+ chNormalization)                                                
+                                                                 
+ activation_17 (Activation)  (None, 2, 4, 4)           0         
+                                                                 
+=================================================================
+Total params: 39,794
+Trainable params: 32,060
+Non-trainable params: 7,734
+_________________________________________________________________

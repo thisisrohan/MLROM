@@ -1,0 +1,89 @@
+Model: "model_4"
+_________________________________________________________________
+ Layer (type)                Output Shape              Param #   
+=================================================================
+ input_5 (InputLayer)        [(None, 2, 4, 4)]         0         
+                                                                 
+ periodic_padding_18 (period  (None, 2, 8, 8)          64        
+ ic_padding)                                                     
+                                                                 
+ conv2d_transpose_6 (Conv2DT  (None, 6, 12, 12)        300       
+ ranspose)                                                       
+                                                                 
+ cropping2d_6 (Cropping2D)   (None, 6, 4, 4)           0         
+                                                                 
+ batch_normalization_18 (Bat  (None, 6, 4, 4)          24        
+ chNormalization)                                                
+                                                                 
+ activation_18 (Activation)  (None, 6, 4, 4)           0         
+                                                                 
+ periodic_padding_19 (period  (None, 6, 8, 8)          64        
+ ic_padding)                                                     
+                                                                 
+ conv2d_transpose_7 (Conv2DT  (None, 16, 12, 12)       2400      
+ ranspose)                                                       
+                                                                 
+ cropping2d_7 (Cropping2D)   (None, 16, 4, 4)          0         
+                                                                 
+ batch_normalization_19 (Bat  (None, 16, 4, 4)         64        
+ chNormalization)                                                
+                                                                 
+ activation_19 (Activation)  (None, 16, 4, 4)          0         
+                                                                 
+ periodic_padding_20 (period  (None, 16, 8, 8)         64        
+ ic_padding)                                                     
+                                                                 
+ conv2d_transpose_8 (Conv2DT  (None, 32, 19, 19)       12800     
+ ranspose)                                                       
+                                                                 
+ cropping2d_8 (Cropping2D)   (None, 32, 7, 7)          0         
+                                                                 
+ batch_normalization_20 (Bat  (None, 32, 7, 7)         128       
+ chNormalization)                                                
+                                                                 
+ activation_20 (Activation)  (None, 32, 7, 7)          0         
+                                                                 
+ periodic_padding_21 (period  (None, 32, 11, 11)       154       
+ ic_padding)                                                     
+                                                                 
+ conv2d_transpose_9 (Conv2DT  (None, 16, 25, 25)       12800     
+ ranspose)                                                       
+                                                                 
+ cropping2d_9 (Cropping2D)   (None, 16, 13, 13)        0         
+                                                                 
+ batch_normalization_21 (Bat  (None, 16, 13, 13)       64        
+ chNormalization)                                                
+                                                                 
+ activation_21 (Activation)  (None, 16, 13, 13)        0         
+                                                                 
+ periodic_padding_22 (period  (None, 16, 17, 17)       442       
+ ic_padding)                                                     
+                                                                 
+ conv2d_transpose_10 (Conv2D  (None, 8, 37, 37)        3200      
+ Transpose)                                                      
+                                                                 
+ cropping2d_10 (Cropping2D)  (None, 8, 25, 25)         0         
+                                                                 
+ batch_normalization_22 (Bat  (None, 8, 25, 25)        32        
+ chNormalization)                                                
+                                                                 
+ activation_22 (Activation)  (None, 8, 25, 25)         0         
+                                                                 
+ periodic_padding_23 (period  (None, 8, 29, 29)        1450      
+ ic_padding)                                                     
+                                                                 
+ conv2d_transpose_11 (Conv2D  (None, 2, 61, 61)        400       
+ Transpose)                                                      
+                                                                 
+ cropping2d_11 (Cropping2D)  (None, 2, 50, 50)         0         
+                                                                 
+ batch_normalization_23 (Bat  (None, 2, 50, 50)        8         
+ chNormalization)                                                
+                                                                 
+ activation_23 (Activation)  (None, 2, 50, 50)         0         
+                                                                 
+=================================================================
+Total params: 34,458
+Trainable params: 32,060
+Non-trainable params: 2,398
+_________________________________________________________________

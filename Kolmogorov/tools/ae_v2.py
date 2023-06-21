@@ -368,6 +368,7 @@ class Autoencoder(Model):
         len_dec_filters = len(self.dec_filters)
         decoder_layers_list = []
         for i in range(len_dec_filters):
+            print('{} / {}'.format(i, len_dec_filters))
             # periodic padding
             decoder_layers_list.append(periodic_padding(elp, erp))
             # transposed CNN
@@ -395,6 +396,7 @@ class Autoencoder(Model):
             )
             if i == len(self.dec_filters)-1:
                 # total_crop = 3*self.kernel_size - 4 # VERY SPECIFIC TO MY PROBLEM WITH INPUT BEING 50x50 DIMENSIONAL and enc_filters/dec_filters having four entries (each)
+                print(out_spatial_dims_precrop)
                 total_crop_y = int(out_spatial_dims_precrop[0] - self.data_dim[-2])
                 ct = int(0.5 * total_crop_y)
                 cb = total_crop_y - ct
