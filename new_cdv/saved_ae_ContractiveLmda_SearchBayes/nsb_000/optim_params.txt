@@ -1,0 +1,1 @@
+{'contractive_lmda_bounds': (0.01, 100.0, 'log-uniform'), 'n_calls': 30, 'acq_func': 'EI', 'n_initial_points': 5, 'random_state': 42}

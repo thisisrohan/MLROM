@@ -1,0 +1,1 @@
+{'learning_rate_list': [0.001, 0.0001], 'epochs': 200, 'patience': 10, 'min_delta': 1e-06, 'prng_seed': 42, 'batch_size': 64, 'fRMS': 0.00779229715, 'stddev': 0.0025974366408567833, 'contractive_lmda': 2.6132222815761222e-06, 'dropout_rate': 0.0}

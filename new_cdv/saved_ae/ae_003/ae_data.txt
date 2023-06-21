@@ -1,0 +1,7 @@
+{'data_dir_idx': '003', 'normalizeforae_flag': True, 'normalization_constant_arr_aedata': array([[ 8.7786663e-01,  2.0868897e-01, -1.5329885e-01, -4.8809254e-01,
+        -1.9809689e-01,  1.7967610e-01,  9.6889889e-01, -7.7892572e-01,
+         9.9797472e-02,  1.2500000e+00,  1.9959494e-01,  5.0000000e-01],
+       [ 1.8582830e-01,  2.5600705e-01,  3.8888946e-01,  3.4714514e-01,
+         3.8951617e-01,  4.5587349e-01,  6.0079239e-02,  4.8427977e-02,
+         6.0733326e-04,  1.0000000e+00,  1.2146665e-03,  1.0000000e+00]],
+      dtype=float32), 'normalization_type': 'stddev', 'stddev_multiplier': 3, 'ae_data_with_params': True, 'module': 'tools.ae_v1'}

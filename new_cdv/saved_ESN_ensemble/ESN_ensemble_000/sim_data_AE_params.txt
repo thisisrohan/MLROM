@@ -1,0 +1,2 @@
+{'params_mat': array([[ 0.95   , -0.76095,  0.1    ,  1.25   ,  0.2    ,  0.5    ]]), 'init_state_mat': array([[ 0.77757527,  0.24587798, -0.27311908, -0.37529679, -0.18999855,
+         0.29736542]]), 't0': 0.0, 'T': 2000.0, 'delta_t': 0.1, 'return_params_arr': False, 'dir_name_ae': '/home/rkaushik/Documents/Thesis/MLROM/new_cdv/saved_ae/ae_001', 'normalize_dataset': True, 'stddev_multiplier': 3, 'use_ae_data': True}
