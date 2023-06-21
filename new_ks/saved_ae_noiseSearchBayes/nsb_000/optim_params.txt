@@ -1,0 +1,1 @@
+{'fRMS_bounds': (0.001, 0.1, 'log-uniform'), 'lambda_reg_bounds': (1e-07, 0.001, 'log-uniform'), 'n_calls': 25, 'acq_func': 'EI', 'n_initial_points': 5, 'random_state': 42}
