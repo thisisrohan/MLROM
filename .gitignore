@@ -1,2 +1,13 @@
 .ipynb_checkpoints/
 __pycache__/
+/Kolmogorov/saved_data/*/data.h5
+/KS/saved_AR_AERNN_rnn/AR_rnn_039/checkpoints/checkpoint-10_outsteps.data-00000-of-00001
+/KS/saved_AR_AERNN_rnn/AR_rnn_039/checkpoints/checkpoint-30_outsteps.data-00000-of-00001
+/KS/saved_AR_AERNN_rnn/AR_rnn_039/checkpoints/checkpoint-50_outsteps.data-00000-of-00001
+/KS/saved_data/data_005/data.npz
+/KS/saved_rnn/rnn_065/checkpoints/checkpoint.data-00000-of-00001
+/new_lorenz/saved_data/data_000/data.npz
+/new_lorenz/saved_data/data_001/data.npz
+/new_lorenz/saved_data/data_003/data.npz
+/new_lorenz/saved_data/data_004/data.npz
+/new_ks/saved_data/data_000/data.npz

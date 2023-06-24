@@ -1413,20 +1413,21 @@ def compute_lyapunov_spectrum(
         init_state_unptb = init_state_mat[ii, :].copy()
         params = params_mat[ii].copy()
         # dY = np.eye(M)*dy
-        dY = np.random.rand(num_modes, num_modes) - 0.5
+        dY = np.random.rand(num_modes, num_exp) - 0.5 # np.random.rand(num_modes, num_modes) - 0.5
         for j in range(dY.shape[1]):
             dY[:, j] /= np.linalg.norm(dY[:, j])
         dY, _ = splnalg.qr(dY)
+        dY = dY[:, 0:num_exp]
         dY *= dy_mat[ii]
 
         # main loop
 
         # initializing the perturbed states        
-        init_state_ptb_mat = np.empty(shape=(num_modes, num_modes))
-        for j in range(num_modes):
+        init_state_ptb_mat = np.empty(shape=(num_modes, num_exp)) # np.empty(shape=(num_modes, num_modes))
+        for j in range(num_exp): # for j in range(num_modes):
             init_state_ptb_mat[:, j] = init_state_unptb + dY[:, j]
         
-        ptb_state_mat = np.empty(shape=(num_modes, num_modes))
+        ptb_state_mat = np.empty(shape=(num_modes, num_exp)) # np.empty(shape=(num_modes, num_modes))
 
         completion_ratio = delta_completionratio
         t0_star = t0
@@ -1444,7 +1445,7 @@ def compute_lyapunov_spectrum(
 
             # evolving the perturbed states
             ptb_dict_j = unptb_dict.copy()
-            for j in range(num_modes):
+            for j in range(num_exp): # for j in range(num_modes):
                 init_state_ptb_j = init_state_ptb_mat[:, j].copy()
                 res_dict_ptb_j = create_data_fn(init_state_mat=init_state_ptb_j, **ptb_dict_j)
                 all_data_ptb_j = res_dict_ptb_j['all_data']
@@ -1453,7 +1454,7 @@ def compute_lyapunov_spectrum(
 
             # computing the lyapunov spectrum
             Q_qrdecomp, R_qrdecomp = splnalg.qr( dY/dy_mat[ii] )
-            for j in range(num_modes):
+            for j in range(num_exp): # for j in range(num_modes):
                 fac = 1
                 temp = R_qrdecomp[j, j]
                 if temp < 0:
@@ -1465,7 +1466,7 @@ def compute_lyapunov_spectrum(
             # updating variables
             t0_star += zeta*delta_t
             init_state_unptb[:] = all_data_unptb[-1, :]
-            for j in range(num_modes):
+            for j in range(num_exp) # for j in range(num_modes):
                 init_state_ptb_mat[:, j] = init_state_unptb + dY[:, j]
 
             if i == int(completion_ratio * xi):

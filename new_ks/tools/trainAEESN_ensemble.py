@@ -407,6 +407,12 @@ def trainAERNN(
         baseline = None
         if behaviour == 'loadCheckpointAndContinueTraining':
             baseline = np.min(val_loss_hist)
+        else:
+            baseline = AR_AERNN_net.evaluate(
+                val_data_rnn_input, val_data_rnn_output,
+            )
+            baseline = baseline[2] # val_NMSE of RNN with loaded weights
+            print('baseline : {:.4E}'.format(baseline))
 
         # time callback for each epoch
         timekeeper_cb = mytimecallback()
@@ -538,6 +544,8 @@ def trainAERNN(
                 lr_change.append(lr_change[i]+len(history.history['val_loss']))
             
             epochs_so_far += epochs_thislr
+            
+            baseline = None
             
     if behaviour == 'initialiseAndTrainFromScratch' or behaviour == 'loadCheckpointAndContinueTraining':
         # test_loss = rnn_net.evaluate(
