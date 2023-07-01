@@ -89,7 +89,7 @@ class uniform_noise(layers.Layer):
 
 class GRUCell_zoneout(layers.GRUCell):
     def __init__(self, **kwargs):
-        self.zoneout_rate = kwargs.pop('zoneout_rate', 0.0)
+        self.zoneout_rate = max(min(kwargs.pop('zoneout_rate', 0.0), 1.0), 0.0)
         super(GRUCell_zoneout, self).__init__(**kwargs)
 
     def call(self, inputs, states, training=None):

@@ -1,0 +1,1 @@
+{'fRMS_bounds': Real(low=0.0001, high=0.1, prior='log-uniform', transform='identity'), 'lambda_reg_bounds': Real(low=1e-07, high=0.001, prior='log-uniform', transform='identity'), 'zoneout_bounds': Real(low=0.0, high=0.5, prior='uniform', transform='identity'), 'n_calls': 40, 'acq_func': 'EI', 'n_initial_points': 30, 'random_state': 42}

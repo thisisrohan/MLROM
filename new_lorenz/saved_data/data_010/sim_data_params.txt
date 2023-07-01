@@ -1,0 +1,1 @@
+{'params_mat': array([[10.        , 28.        ,  2.66666667]]), 't0': 0.0, 'T': 42000.0, 'delta_t': 0.01, 'return_params_arr': False, 'normalize_flag': False, 'alldata_withparams_flag': False, 'prng_seed': 42}

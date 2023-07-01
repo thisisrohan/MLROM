@@ -370,6 +370,7 @@ class AR_AERNN_ESN(Model):
         x, y, sample_weight = data_adapter.unpack_x_y_sample_weight(data)
         sw_cov = 1.0 if sample_weight is None else sample_weight
         
+        # y = tf.reshape(y, (-1, y.shape[1], y.shape[2]*y.shape[3]*y.shape[4]))
         # print(x.shape, y.shape, sample_weight, sw_cov)
         
         _warmup_upto_tinputminusone_tuple = self._warmup_upto_tinputminusone(

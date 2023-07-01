@@ -97,7 +97,7 @@ class uniform_noise(layers.Layer):
 
 class GRUCell_zoneout(layers.GRUCell):
     def __init__(self, **kwargs):
-        self.zoneout_rate = kwargs.pop('zoneout_rate', 0.0)
+        self.zoneout_rate = max(min(kwargs.pop('zoneout_rate', 0.0), 1.0), 0.0)
         super(GRUCell_zoneout, self).__init__(**kwargs)
 
     def call(self, inputs, states, training=None):
@@ -289,7 +289,7 @@ class AR_RNN_GRU(Model):
             )
         ]
         if self.num_skip_connections > 0:
-            self.RK_RNNCell = cell=GRUCell_zoneout(
+            self.RK_RNNCell = GRUCell_zoneout(
                 units=self.rnn_layers_units[1],
                 kernel_regularizer=reg(self.lambda_reg),
                 bias_regularizer=reg(self.lambda_reg),

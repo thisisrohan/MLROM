@@ -30,6 +30,9 @@ class single_weights(layers.Layer):
 
     def call(self, x):
         return x * self.individual_weights
+        
+    def compute_output_shape(self, input_shape):
+        return input_shape
 
 
 class Autoencoder(Model):

@@ -56,6 +56,7 @@ class Autoencoder(Model):
             contractive_lmda=1.0,
             use_weights_post_dense=False,
             dropout_rate=0.0,
+            ls_stddev=None,
             **kwargs,
         ):
         
@@ -76,6 +77,7 @@ class Autoencoder(Model):
         self.dec_final_layer_act_func = dec_final_layer_act_func
         self.use_weights_post_dense = use_weights_post_dense
         self.dropout_rate = dropout_rate
+        self.ls_stddev = ls_stddev
         if self.load_file is not None:
             with open(load_file, 'r') as f:
                 lines = f.readlines()
@@ -112,9 +114,17 @@ class Autoencoder(Model):
                 self.use_weights_post_dense = load_dict['use_weights_post_dense']
             if 'dropout_rate' in load_dict.keys():
                 self.dropout_rate = load_dict['dropout_rate']
+            if 'ls_stddev' in load_dict.keys():
+                self.ls_stddev = load_dict['ls_stddev']
 
-        if stddev != None:
+        if not isinstance(stddev, type(None)):
             self.stddev = stddev
+        if not isinstance(ls_stddev, type(None)):
+            self.ls_stddev = ls_stddev
+        if isinstance(self.stddev, type(None)):
+            self.stddev = 0.0
+        if isinstance(self.ls_stddev, type(None)):
+            self.ls_stddev = 0.0
 
         self.dropout_rate = min(1.0, max(0.0, self.dropout_rate))
 
@@ -130,6 +140,7 @@ class Autoencoder(Model):
 
         ### the encoder network
         self.noise_layer = layers.GaussianNoise(stddev=self.stddev)
+        self.dec_noise_layer = layers.GaussianNoise(stddev=self.ls_stddev)
 
         if self.enc_layer_act_func == 'modified_relu':
             a = 1 - np.exp(-1)
@@ -191,7 +202,8 @@ class Autoencoder(Model):
 
         
         encoded_input_vec = Input(shape=encoded_vec.shape[-1],)
-        x = decoder_layers_list[0](encoded_input_vec)
+        x = self.dec_noise_layer(encoded_input_vec)
+        x = decoder_layers_list[0](x)
         for i in range(1, len(decoder_layers_list)):
             if self.dropout_rate > 0.0:
                 x = layers.Dropout(self.dropout_rate)(x)

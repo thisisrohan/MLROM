@@ -6,6 +6,7 @@
 # outputs of the different kernel sizes                                        #
 # Uses as fc layer at the end of the conv layers to make whatever ls dimension #
 # 'Actually' uses the final enc/dec activation functions                       #
+# Noise in decoder as well                                                     #
 ################################################################################
 
 import numpy as np
@@ -35,6 +36,9 @@ class single_weights(layers.Layer):
 
     def call(self, x):
         return x * self.individual_weights
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
         
 class scalar_multiplication(layers.Layer):
     def __init__(self, w_regularizer=None, trainable_scalar=True, init_value=1.0, **kwargs):
@@ -209,12 +213,13 @@ class Autoencoder(Model):
             dec_layer_act_func='elu',
             dec_final_layer_act_func='linear',
             load_file=None,
-            stddev=0.0,
+            stddev=None,
             use_weights_post_dense=False,
             use_batch_norm=True,
             use_periodic_padding=False,
             use_attention_module=False,
             ls_dim=0,
+            ls_stddev=None,
             **kwargs,
         ):
         
@@ -241,6 +246,7 @@ class Autoencoder(Model):
         self.use_periodic_padding = use_periodic_padding
         self.use_attention_module = use_attention_module
         self.ls_dim = ls_dim
+        self.ls_stddev = ls_stddev
         if self.load_file is not None:
             with open(load_file, 'r') as f:
                 lines = f.readlines()
@@ -289,6 +295,8 @@ class Autoencoder(Model):
                 self.use_attention_module = load_dict['use_attention_module']
             if 'ls_dim' in load_dict.keys():
                 self.ls_dim = load_dict['ls_dim']
+            if 'ls_stddev' in load_dict.keys():
+                self.ls_stddev = load_dict['ls_stddev']
 
         # print(self.kernel_size, type(self.kernel_size))
         try:
@@ -300,6 +308,14 @@ class Autoencoder(Model):
         num_kernel_sizes = self.kernel_size.shape[0]
         # print(self.kernel_size, type(self.kernel_size))
         
+        if not isinstance(stddev, type(None)):
+            self.stddev = stddev
+        if not isinstance(ls_stddev, type(None)):
+            self.ls_stddev = ls_stddev
+        if isinstance(self.stddev, type(None)):
+            self.stddev = 0.0
+        if isinstance(self.ls_stddev, type(None)):
+            self.ls_stddev = 0.0
 
         if self.use_periodic_padding == True:
             padding = 'valid'
@@ -322,6 +338,7 @@ class Autoencoder(Model):
 
         ### the encoder network
         self.noise_layer = layers.GaussianNoise(stddev=self.stddev, name='gaussian_noise')
+        self.dec_noise_layer = layers.GaussianNoise(stddev=self.ls_stddev, name='gaussian_noise')
 
         if self.enc_layer_act_func == 'modified_relu':
             a = 1 - np.exp(-1)
@@ -599,6 +616,7 @@ class Autoencoder(Model):
                             attn_iter += 1
 
         encoded_input_vec = Input(shape=encoded_vec.shape[1:])
+        encoded_input_vec = self.dec_noise_layer(encoded_input_vec)
 
         self.decoded_vec_weights = []
         for ks_i in range(num_kernel_sizes):
@@ -749,6 +767,7 @@ class Autoencoder(Model):
             'use_attention_module':self.use_attention_module,
             'use_periodic_padding':self.use_periodic_padding,
             'ls_dim':self.ls_dim,
+            'ls_stddev':self.ls_stddev,
         }
         with open(file_name, 'w') as f:
             f.write(str(class_dict))

@@ -11,3 +11,6 @@ __pycache__/
 /new_lorenz/saved_data/data_003/data.npz
 /new_lorenz/saved_data/data_004/data.npz
 /new_ks/saved_data/data_000/data.npz
+/new_ks/saved_rnn/rnn_003/checkpoints/checkpoint.data-00000-of-00001
+/new_ks/saved_rnn/rnn_003/final_net/final_net_gru_weights.h5
+/new_ks/saved_rnn/rnn_004/checkpoints/checkpoint.data-00000-of-00001
