@@ -858,6 +858,9 @@ def plot_losses(
         plot_type='semilogy',
         epoch_count_begin=None,
         epoch_count_end=None,
+        xlabel_kwargs={},
+        ylabel_kwargs={},
+        legend_kwargs={},
         ):
 
     if epoch_count_begin == None:
@@ -880,19 +883,24 @@ def plot_losses(
                 args = []
                 kwargs = {}
             eval("ax."+plot_type+"(epoch_count, more_plot_arrs_lst[i], *args, **kwargs)")
-    ax.legend(legend_list)
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel(ylabel)
-    ax.grid(True)
+    ax.legend(legend_list, **legend_kwargs)
+    ax.set_xlabel(xlabel, **xlabel_kwargs)
+    ax.set_ylabel(ylabel, **ylabel_kwargs)
+    ax.grid(True, which='major', axis='x')
+    ax.grid(True, which='both', axis='y')
     ax.set_axisbelow(True)
 
     if learning_rate_list is not None:
         for i in range(len(lr_change)-1):
-            ax.axvline(lr_change[i], color='m', linestyle='-.', linewidth=0.8)
+            ax.axvline(lr_change[i]+1, color='m', linestyle='-.', linewidth=0.8)
+            lr_txt = "{:.2E}".format(learning_rate_list[i])
+            idx = lr_txt.find('E')
+            lr_txt = "lr = $" + lr_txt[0:idx] + " \\times 10^{" + lr_txt[idx+1:] + "}$"
+            
             ax.text(
                 lr_change[i]+ax.transData.inverted().transform(ax.transAxes.transform([lr_x_offset_axes_coord, 0.]))[0],
                 ax.transData.inverted().transform(ax.transAxes.transform([0., lr_y_placement_axes_coord]))[1],
-                'lr={}'.format(learning_rate_list[i]),
+                lr_txt,# 'lr={:.2E}'.format(learning_rate_list[i]),
                 rotation=90,
                 verticalalignment='center',
                 horizontalalignment='left',
@@ -900,6 +908,87 @@ def plot_losses(
             )
 
     return fig, ax
+
+
+def plot_histogram_and_save(
+        prediction_horizon_arr, median,
+        save_dir,
+        savefig_fname='pre_ARtraining',
+        bin_width=0.1,
+        bin_begin=0.0,
+        xlabel_kwargs={"fontsize":15},
+        ylabel_kwargs={"fontsize":15},
+        title_kwargs={"fontsize":18},
+        legend_kwargs={"fontsize":12},
+        title_text = None,
+    ):
+    
+    fig, ax = plt.subplots()
+    prediction_horizon_arr.sort()
+
+    ph_mean = np.mean(prediction_horizon_arr)
+    ph_stddev = np.std(prediction_horizon_arr)
+    ph_max = np.max(prediction_horizon_arr)
+    ph_min = np.min(prediction_horizon_arr)
+    
+    bin_end = bin_width*np.round((np.max(prediction_horizon_arr)+0.5*bin_width)//bin_width)
+    nbins = max(1, int(np.round(bin_end/bin_width)))
+
+    ax.hist(prediction_horizon_arr, bins=nbins, range = [bin_begin, bin_end], density=True)
+    ax.axvline(ph_mean, linewidth=0.9, linestyle='--', color='k')
+
+    ax.set_xlabel('Prediction Horizon (Lyapunov times)', **xlabel_kwargs)
+    ax.set_ylabel('PDF', **ylabel_kwargs)
+
+    ax.grid(True)
+    # ax.set_axisbelow(True)
+
+    ax.text(
+        0.01 + ax.transAxes.inverted().transform(ax.transData.transform([ph_mean, 0]))[0],
+        0.8,
+        'mean',
+        rotation=90,
+        verticalalignment='bottom',
+        horizontalalignment='left',
+        bbox=dict(facecolor=np.array([255,255,153])/255, alpha=0.6, boxstyle='square,pad=0.2'),
+        transform=ax.transAxes
+    )
+
+    text_xy = [0.95, 0.95]
+    ax.text(
+        text_xy[0],
+        text_xy[1],
+        'mean : {:.4f}\nmedian : {:.4f}\nmax : {:.4f}\nmin : {:.4f}\nstddev : {:.4f}'.format(
+            ph_mean,
+            median,
+            ph_max,
+            ph_min,
+            ph_stddev,
+        ),
+        transform=ax.transAxes,
+        bbox=dict(
+            boxstyle="round",
+            ec=(0.6, 0.6, 1),
+            fc=(0.9, 0.9, 1),
+            alpha=0.6,
+        ),
+        # bbox=dict(facecolor='C0', alpha=0.5, boxstyle='round,pad=0.2'),
+        horizontalalignment='right',
+        verticalalignment='top',
+        **legend_kwargs
+    )
+
+    if title_text == None:
+        title_text = 'nbins = {}'.format(nbins)
+    ax.set_title(title_text, **title_kwargs)
+    
+    if not os.path.isdir(save_dir):
+        os.mkdir(save_dir)
+
+    fig.savefig(save_dir+'/'+savefig_fname+'.pdf', dpi=300, bbox_inches='tight')
+    fig.clear()
+    plt.close()
+
 
 ################################################################################
 

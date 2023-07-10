@@ -1,0 +1,1 @@
+{'learning_rate_list': [0.01, 0.001, 0.0001, 1e-05], 'epochs': 200, 'patience': 10, 'min_delta': 1e-06, 'prng_seed': 42, 'train_split': 0.8, 'val_split': 0.1, 'batch_size': 32, 'fRMS': 0.00517947468, 'timeMeanofSpaceRMS': 0.2933353, 'stddev': 0.0017228189150698256, 'zoneout_rate': 0.0, 'rnncell_dropout_rate': 0.0, 'denselayer_dropout_rate': 0.0}

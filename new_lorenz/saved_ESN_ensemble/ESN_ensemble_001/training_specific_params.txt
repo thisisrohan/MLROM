@@ -1,1 +1,1 @@
-{'epochs': 1, 'prng_seed': 42, 'train_split': 0.8, 'val_split': 0.1, 'batch_size': 1, 'fRMS': 0.001, 'timeMeanofSpaceRMS': 0.29314774, 'stddev': 0.0003333298265933991, 'lambda_reg': 1e-07, 'min_delta': 1e-06, 'patience': 5, 'use_best': False}
+{'epochs': 1, 'prng_seed': 42, 'train_split': 0.8, 'val_split': 0.1, 'batch_size': 1, 'fRMS': 0.0187886464, 'timeMeanofSpaceRMS': 0.2933353, 'stddev': 0.006249559541524506, 'lambda_reg': 1e-07, 'min_delta': 1e-06, 'patience': 5, 'use_best': False}

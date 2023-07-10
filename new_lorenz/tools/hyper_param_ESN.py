@@ -16,7 +16,10 @@ import h5py
 
 tf.keras.backend.set_floatx('float32')
 
-plt.rcParams.update({"text.usetex":True}) # enable tex rendering in matplotlib
+plt.rcParams.update({
+    "text.usetex":True,
+    "font.family":"serif",
+}) # enable tex rendering in matplotlib
 
 FTYPE = np.float32
 ITYPE = np.int32
@@ -87,22 +90,22 @@ def norm_sq_time_average(data):
 
 def invert_normalization(data, normalization_arr):
     new_data = data.copy()
-    shape = new_data.shape
-    for i in range(shape[-1]):
-        if len(shape) == 2:
-            new_data[:, i] *= normalization_arr[1, i]
-            new_data[:, i] += normalization_arr[0, i]
-        elif len(shape) == 3:
-            new_data[:, :, i] *= normalization_arr[1, i]
-            new_data[:, :, i] += normalization_arr[0, i]
+    new_data *= normalization_arr[1]
+    new_data += normalization_arr[0]
     return new_data
 
 def plot_histogram_and_save(
-    prediction_horizon_arr, median,
-    save_dir,
-    savefig_fname='pre_ARtraining',
-    bin_width=0.1,
-    bin_begin=0.0):
+        prediction_horizon_arr, median,
+        save_dir,
+        savefig_fname='pre_ARtraining',
+        bin_width=0.1,
+        bin_begin=0.0,
+        xlabel_kwargs={"fontsize":15},
+        ylabel_kwargs={"fontsize":15},
+        title_kwargs={"fontsize":18},
+        legend_kwargs={"fontsize":12},
+        title_text = None,
+    ):
     
     fig, ax = plt.subplots()
     prediction_horizon_arr.sort()
@@ -113,13 +116,13 @@ def plot_histogram_and_save(
     ph_min = np.min(prediction_horizon_arr)
     
     bin_end = bin_width*np.round((np.max(prediction_horizon_arr)+0.5*bin_width)//bin_width)
-    nbins = int(np.round(bin_end/bin_width))
+    nbins = max(int(np.round(bin_end/bin_width)), 1)
 
     ax.hist(prediction_horizon_arr, bins=nbins, range = [bin_begin, bin_end], density=True)
     ax.axvline(ph_mean, linewidth=0.9, linestyle='--', color='k')
 
-    ax.set_xlabel('Prediction Horizon (Lyapunov times)')
-    ax.set_ylabel('PDF')
+    ax.set_xlabel('Prediction Horizon (Lyapunov times)', **xlabel_kwargs)
+    ax.set_ylabel('PDF', **ylabel_kwargs)
 
     ax.grid(True)
     # ax.set_axisbelow(True)
@@ -131,7 +134,7 @@ def plot_histogram_and_save(
         rotation=90,
         verticalalignment='bottom',
         horizontalalignment='left',
-        bbox=dict(facecolor=np.array([255,255,153])/255, alpha=1, boxstyle='square,pad=0.2'),
+        bbox=dict(facecolor=np.array([255,255,153])/255, alpha=0.6, boxstyle='square,pad=0.2'),
         transform=ax.transAxes
     )
 
@@ -151,20 +154,99 @@ def plot_histogram_and_save(
             boxstyle="round",
             ec=(0.6, 0.6, 1),
             fc=(0.9, 0.9, 1),
+            alpha=0.6,
         ),
         # bbox=dict(facecolor='C0', alpha=0.5, boxstyle='round,pad=0.2'),
         horizontalalignment='right',
-        verticalalignment='top'
+        verticalalignment='top',
+        **legend_kwargs
     )
 
-    ax.set_title('nbins = {}'.format(nbins))
+    if title_text == None:
+        title_text = 'nbins = {}'.format(nbins)
+    ax.set_title(title_text, **title_kwargs)
     
     if not os.path.isdir(save_dir):
         os.mkdir(save_dir)
 
-    fig.savefig(save_dir+'/'+savefig_fname+'.png', dpi=300, bbox_inches='tight')
+    fig.savefig(save_dir+'/'+savefig_fname+'.pdf', dpi=300, bbox_inches='tight')
     fig.clear()
     plt.close()
+
+
+def find_and_return_load_wt_file_lists(
+        load_dir,
+        wt_matcher='weights.hdf5',
+        classdict_matcher='class_dict.txt',
+    ):
+    contents_load_dir = [f for f in os.listdir(load_dir) if os.path.isfile(os.path.join(load_dir, f))]
+    load_files_lst = [f for f in contents_load_dir if f.endswith(classdict_matcher)]
+    wt_files_lst = [f for f in contents_load_dir if f.endswith(wt_matcher)]
+
+    load_files_lst_startingidx = []
+    for i in range(len(load_files_lst)):
+        fn = load_files_lst[i]
+        idx = fn.find('_')
+        load_files_lst_startingidx.append(int(fn[0:idx]))
+
+    wt_files_lst_startingidx = []
+    for i in range(len(wt_files_lst)):
+        fn = wt_files_lst[i]
+        idx = fn.find('_')
+        wt_files_lst_startingidx.append(int(fn[0:idx]))
+
+    load_files_sortidx = np.argsort(load_files_lst_startingidx)
+    wt_files_sortidx = np.argsort(wt_files_lst_startingidx)
+
+    load_files_lst = np.array(load_files_lst)[load_files_sortidx]
+    wt_files_lst = np.array(wt_files_lst)[wt_files_sortidx]
+
+    load_file_rnn = [load_dir + '/' + fn for fn in load_files_lst]
+    wt_file_rnn = [load_dir + '/' +  fn for fn in wt_files_lst]
+    
+    return load_file_rnn, wt_file_rnn
+
+class ESN_ensemble_AR(Model):
+    """
+    Ensemble AR prediction.
+    """
+    def __init__(
+            self, ensemble_list, num_sample_output_AR,
+            **kwargs,
+            ):
+
+        super().__init__()
+        self.ensemble_list = ensemble_list
+        self.num_sample_output_AR = num_sample_output_AR
+
+    # @tf.function
+    def call(self, inputs, **kwargs):
+        
+        prediction_list = []
+
+        x = self.ensemble_list[0](inputs, **kwargs)
+        for i in range(1, len(self.ensemble_list)):
+            x += self.ensemble_list[i](inputs, **kwargs)
+        x = x / len(self.ensemble_list)        
+        x = x[:, -1:, :]
+
+        prediction_list.append(x)
+        
+        for j in range(1, self.num_sample_output_AR):
+            data_in_j = prediction_list[-1]
+            x = self.ensemble_list[0](data_in_j, **kwargs)
+            for i in range(1, len(self.ensemble_list)):
+                x += self.ensemble_list[i](data_in_j, **kwargs)
+            x = x / len(self.ensemble_list)        
+            x = x[:, -1:, :]
+            prediction_list.append(x)
+
+        prediction_list = tf.stack(prediction_list)
+        prediction_list = tf.squeeze(prediction_list, axis=-2)
+        prediction_list = tf.transpose(prediction_list, [1, 0, 2])
+        
+        return prediction_list
+        
 
 
 def trainESN_and_return_PH(
@@ -172,6 +254,9 @@ def trainESN_and_return_PH(
         time_stddev,
         og_vars,
         ESN,
+        AR_RNN,
+        AR_AERNN,
+        ae_net,
         plot_losses,
         dir_name_rnn,
         boundary_idx_arr,
@@ -186,10 +271,16 @@ def trainESN_and_return_PH(
         testing_data_rnn_output,
         val_data_rnn_input,
         val_data_rnn_output,
-        return_params_arr,
+        AR_testing_data_rnn_input,
+        AR_testing_data_rnn_output,
         normalize_dataset,
         dt_rnn,
         noise_type,
+        ae_data_normalization_arr,
+        time_stddev_ogdata,
+        time_mean_ogdata,
+        T_sample_input,
+        T_sample_output,
         num_ensemble_mems=1,
         ESN_layers_units = [1500],
         stateful = True,
@@ -364,10 +455,10 @@ def trainESN_and_return_PH(
                 Yb = Yb + np.matmul(np.transpose(y), h)
                 batch_time = time.time() - batch_time
                 avg_time = (avg_time*j + batch_time)/(j+1)
-                eta = avg_time * (num_runs-1 - j)
+                eta = avg_time * (training_data_rnn_input.shape[0]-1 - j)
                 print('{} / {} -- Wout batch_time : {:.2f} s -- eta : {:.0f}h {:.0f}m {:.0f}s'.format(
                     j+1,
-                    num_runs,
+                    training_data_rnn_input.shape[0],
                     batch_time,
                     float(eta // 3600),
                     float((eta%3600)//60),
@@ -420,7 +511,7 @@ def trainESN_and_return_PH(
                 layer.reset_states()
 
             print('\nval mse')
-            # '''
+            
             val_mse = 0
             for j in range(val_data_rnn_input.shape[0]):
                 batch_time = time.time()
@@ -441,7 +532,7 @@ def trainESN_and_return_PH(
                 layer.reset_states()
 
             print('\ntraining mse')
-            # '''
+
             train_mse = 0
             for j in range(training_data_rnn_input.shape[0]):
                 batch_time = time.time()
@@ -486,6 +577,7 @@ def trainESN_and_return_PH(
             tf.keras.backend.set_value(rnn_net.Wout.kernel, Wout_best[0:ESN_layers_units[-1], :])
             if usebias_Wout == True:
                 tf.keras.backend.set_value(rnn_net.Wout.bias, Wout_best[-1, :])
+
         print('\ntest mse')
         test_mse = 0
         for j in range(testing_data_rnn_input.shape[0]):
@@ -520,93 +612,69 @@ def trainESN_and_return_PH(
                 'normalization_arr':normalization_arr
             }))
             
-    
-    s_in = testing_data_rnn_input.shape
-    testing_data_rnn_input = testing_data_rnn_input.reshape((1, s_in[0]*s_in[1]) + s_in[2:])
-
-    s_out = testing_data_rnn_output.shape
-    testing_data_rnn_output = testing_data_rnn_output.reshape((1, s_out[0]*s_out[1]) + s_out[2:])
-
-    T_sample_input_AR = T_sample_input_AR_ratio*np.mean(lyapunov_time_arr)#50.1*dt_rnn
-    num_sample_input_AR = int((T_sample_input_AR+0.5*dt_rnn)//dt_rnn)
-
-    T_sample_output_AR = T_sample_output_AR_ratio*np.mean(lyapunov_time_arr)
-    num_sample_output_AR = int((T_sample_output_AR+0.5*dt_rnn)//dt_rnn)
-
-    num_offset_AR = num_sample_input_AR
-    T_offset_AR = num_offset_AR*dt_rnn
-    
-    data_to_consider = 'testing'
-
-    data_in = eval(data_to_consider+'_data_rnn_input')
-    data_out = eval(data_to_consider+'_data_rnn_output')
-
-    batch_idx = np.random.randint(low=0, high=data_in.shape[0])
-    maxpossible_num_runs = data_in.shape[1]-(num_sample_input_AR+num_sample_output_AR)
-    
-    num_runs = np.min([num_runs, maxpossible_num_runs])
-
-    data_idx_arr = np.linspace(0, maxpossible_num_runs-1, num_runs, dtype=np.int32)
-
-    savefig_fname = 'pre_ARtraining-'+data_to_consider+'data'
-    npsavedata_fname = '/prediction_horizons-'+data_to_consider+'data'
-    plot_dir = '/plots'
 
     analysis_time = time.time()
+    load_file_rnn, wt_file_rnn = find_and_return_load_wt_file_lists(save_path)
+    AR_rnn_kwargs = {'wts_to_be_loaded':True}
+    AR_rnn_net = AR_RNN(
+        load_file=load_file_rnn,
+        T_input=T_sample_input,
+        T_output=T_sample_output,
+        stddev=0.0,
+        batch_size=num_runs,
+        lambda_reg=lambda_reg/len(load_file_rnn),
+        **AR_rnn_kwargs
+    )
+    AR_rnn_net.build(input_shape=tuple(AR_testing_data_rnn_input.shape[0:2]) + tuple(testing_data_rnn_input.shape[2:]))
+    AR_rnn_net.load_weights_from_file(wt_file_rnn)
 
-    sidx1 = dir_name_rnn[::-1].index('/')
-    sidx2 = dir_name_rnn[-sidx1-2::-1].index('/')
-    print(dir_name_rnn[-(sidx1+sidx2+1):])
-    print('num_runs :', num_runs)
+    AR_AERNN_net = AR_AERNN(
+        ae_net,
+        AR_rnn_net,
+        normalization_arr,
+        ae_data_normalization_arr,
+        covmat_lmda=0.0,
+        time_stddev_ogdata=time_stddev_ogdata,
+        time_mean_ogdata=time_mean_ogdata,
+        loss_weights=None,
+        clipnorm=None,
+        global_clipnorm=None
+    )
 
+    savefig_fname = 'pre_ARtraining-testingdata--combinedAERNN--ZEROoutsteps'
+    npsavedata_fname = '/prediction_horizons-testingdata--combinedAERNN--ZEROoutsteps'
+    plot_dir = '/plots'
+    
+    
+    avg_time = 0.
     prediction_horizon_arr = np.empty(shape=num_runs)
-
+    prediction_lst = np.array(AR_AERNN_net.call(AR_testing_data_rnn_input, training=False))[0]
+    prediction_lst = invert_normalization(prediction_lst, ae_data_normalization_arr)
     for i in range(num_runs):
-        data_idx = data_idx_arr[i]
-
+        run_time = time.time()
+        
         # for j in range(len(rnn_data_boundary_idx_arr)):
         #     if data_idx < rnn_data_boundary_idx_arr[j]:
         #         case_idx = j
         #         break
         lyap_time = lyapunov_time_arr[0]
 
-        ### picking the data
-        data_ = data_in[0:1, data_idx:data_idx+(num_sample_input_AR+num_sample_output_AR), :]
-
-        ### doing the predictions
-        prediction_lst = []
-        
-        for rnn_net in ensemble_lst:
+        ### doing the predictions        
+        for rnn_net in AR_AERNN_net.rnn_net.ensemble_list:
             for layer in rnn_net.ESN_layers:
                 layer.reset_states()
 
-        input_preds = np.array(get_ensemble_prediction(
-            ensemble_lst,
-            data_[:, 0:num_sample_input_AR, :],
-            {'training':False}
-        ))[0]
-
-        prediction_lst.append(input_preds[-1])
-
-        for j in range(1, num_sample_output_AR):
-            data_in_j = np.array([[prediction_lst[-1]]])
-            output = np.array(get_ensemble_prediction(
-                ensemble_lst,
-                data_in_j,
-                {'training':False}
-            ))[0, 0]
-            prediction_lst.append(output)
-        prediction_lst = np.stack(prediction_lst)
-        # prediction_lst = invert_normalization(prediction_lst, normalization_arr)
+        # prediction_lst = np.array(AR_AERNN_net.call(AR_testing_data_rnn_input[i:i+1], training=False))[0]
+        # prediction_lst = invert_normalization(prediction_lst, ae_data_normalization_arr)
         
-        data_out = data_[0, num_sample_input_AR:num_sample_input_AR+num_sample_output_AR, :]
-        # data_out = invert_normalization(data_out, normalization_arr)
+        data_out = AR_testing_data_rnn_output[i]
+        data_out = invert_normalization(data_out, ae_data_normalization_arr)
 
         ### Error and prediction horizon
         # error = np.linalg.norm(data_out[:, :] - prediction[i, :, :], axis=1)
         error = (data_out[:, :] - prediction_lst[:, :])**2
         # error /= norm_sq_time_average(data_out)**0.5
-        error = np.mean(np.divide(error, time_stddev**2), axis=1)**0.5
+        error = np.mean(np.divide(error, time_stddev_ogdata**2), axis=1)**0.5
 
         predhor_idx = np.where(error >= error_threshold)[0]
         if predhor_idx.shape[0] == 0:
@@ -615,6 +683,18 @@ def trainESN_and_return_PH(
             predhor_idx = predhor_idx[0]
 
         prediction_horizon_arr[i] = predhor_idx*dt_rnn/lyap_time
+        
+        run_time = time.time() - run_time
+        avg_time = (avg_time*i + run_time)/(i+1)
+        eta = avg_time * (num_runs-1 - i)
+        print('    {} / {} -- run_time : {:.2f} s -- eta : {:.0f}h {:.0f}m {:.0f}s'.format(
+            i+1,
+            num_runs,
+            run_time,
+            float(eta // 3600),
+            float((eta%3600)//60),
+            float((eta%3600)%60),
+        ))
 
     median_idx = int(np.round(0.5*num_runs-1))
     quartile_1_idx = int(np.round(0.25*num_runs-1))
@@ -644,7 +724,6 @@ def trainESN_and_return_PH(
         savefig_fname=savefig_fname,
     )
 
-    npsavedata_fname = '/prediction_horizons-'+data_to_consider+'data'
     np.savez(
         dir_name_rnn+npsavedata_fname,
         prediction_horizon_arr=prediction_horizon_arr,

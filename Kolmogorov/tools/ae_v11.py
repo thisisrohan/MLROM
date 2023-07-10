@@ -59,6 +59,9 @@ class scalar_multiplication(layers.Layer):
 
     def call(self, x):
         return x * self.scalar_multiplier
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
     
 
 class periodic_padding(layers.Layer):

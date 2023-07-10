@@ -1,2 +1,2 @@
-{'normalization_arr': array([[ 0.04633007, -0.35257778],
-       [ 0.37077188,  0.4123432 ]], dtype=float32)}
+{'normalization_arr': array([[ 0.04458535, -0.35516125],
+       [ 0.3707655 ,  0.41180396]], dtype=float32)}
