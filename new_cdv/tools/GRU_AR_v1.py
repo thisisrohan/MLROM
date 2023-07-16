@@ -438,10 +438,10 @@ class AR_RNN_GRU(Model):
         for j in range(len(self.dense_layer_act_func)):
             if self.denselayer_dropout_rate > 0.0:
                 output = self.dense_dropout[j](output, training=training)
-            output = layers.TimeDistributed(self.dense[j])(output, training=training)
+            output = self.dense[j](output, training=training)
 
         if self.use_weights_post_dense == True:
-            output = layers.TimeDistributed(self.dense[-1])(output, training=training)
+            output = self.dense[-1](output, training=training)
 
         return output, states_list, intermediate_outputs_lst, scalar_multiplier_list
 
@@ -496,10 +496,10 @@ class AR_RNN_GRU(Model):
         for j in range(len(self.dense_layer_act_func)):
             if self.denselayer_dropout_rate > 0.0:
                 x = self.dense_dropout[j](x, training=training)
-            x = layers.TimeDistributed(self.dense[j])(x, training=training)
+            x = self.dense[j](x, training=training)
 
         if self.use_weights_post_dense == True:
-            x = layers.TimeDistributed(self.dense[-1])(x, training=training)
+            x = self.dense[-1](x, training=training)
 
         return x, states_list
 

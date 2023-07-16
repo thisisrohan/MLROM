@@ -170,9 +170,9 @@ def trainAERNN(
     num_samples_arr = np.zeros(shape=rnn_data_boundary_idx_arr.shape[0], dtype='int32')
     begin_idx = 0
     for i in range(len(rnn_data_boundary_idx_arr)):
-        num_samples = rnn_data_boundary_idx_arr[i] - begin_idx
-        num_train_arr[i] = batch_size * (int( np.round(train_split*num_samples) )//batch_size)
-        num_val_arr[i] = batch_size * (int( np.round(val_split*num_samples) )//batch_size)
+        num_samples = batch_size * int( (rnn_data_boundary_idx_arr[i] - begin_idx) // batch_size )
+        num_train_arr[i] = batch_size * int( np.round(train_split*num_samples/batch_size) )
+        num_val_arr[i] = batch_size * int( np.round(val_split*num_samples/batch_size) )
         num_test_arr[i] = batch_size * int((num_samples - num_train_arr[i] - num_val_arr[i])//batch_size)
         num_samples_arr[i] = num_train_arr[i] + num_val_arr[i] + num_test_arr[i]
         begin_idx = rnn_data_boundary_idx_arr[i]
@@ -272,7 +272,7 @@ def trainAERNN(
                 T_output=T_sample_output,
                 stddev=stddev_rnn,
                 batch_size=batch_size,
-                lambda_reg=lambda_reg/len(load_file_rnn),
+                lambda_reg=lambda_reg,
                 # stateful=stateful,
                 **rnn_kwargs,
             )
@@ -283,7 +283,7 @@ def trainAERNN(
             T_output=T_sample_output,
             stddev=stddev_rnn,
             batch_size=batch_size,
-            lambda_reg=lambda_reg/len(load_file_rnn),
+            lambda_reg=lambda_reg,
             # stateful=stateful,
             **rnn_kwargs,
         )
@@ -331,7 +331,9 @@ def trainAERNN(
         clipnorm=clipnorm,
         global_clipnorm=global_clipnorm,
     )
-
+    # AR_AERNN_net.ae_net.trainable = False
+    # print(AR_AERNN_net.ae_net.encoder_net.trainable)
+    # print(AR_AERNN_net.ae_net.decoder_net.trainable)
     # AR_AERNN_net.build(input_shape=(batch_size,)+training_data_rnn_input.shape[1:])
 
     
@@ -403,6 +405,8 @@ def trainAERNN(
 
     ### training AR AE-RNN
     if behaviour == 'initialiseAndTrainFromScratch' or behaviour == 'loadCheckpointAndContinueTraining':
+        sum_patience = 0
+        sum_epochs = 0
         # implementing early stopping
         baseline = None
         if behaviour == 'loadCheckpointAndContinueTraining':
@@ -410,8 +414,10 @@ def trainAERNN(
         else:
             baseline = AR_AERNN_net.evaluate(
                 val_data_rnn_input, val_data_rnn_output,
+                batch_size=batch_size
             )
-            baseline = baseline[2] # val_NMSE of RNN with loaded weights
+            baseline = baseline[3] # val_NMSE_wt of RNN with loaded weights
+            baseline_og = baseline
             print('baseline : {:.4E}'.format(baseline))
 
         # time callback for each epoch
@@ -423,7 +429,7 @@ def trainAERNN(
             os.makedirs(dir_name_ckpt)
         checkpoint_cb = tf.keras.callbacks.ModelCheckpoint(
             filepath=dir_name_ckpt+'/checkpoint-{}_outsteps'.format(num_outsteps),#+'/checkpoint--loss={loss:.4f}--vall_loss={val_loss:.4f}',
-            monitor='val_NMSE',
+            monitor='val_NMSE_wt',
             save_best_only=True,
             save_weights_only=True,
             verbose=2,
@@ -433,29 +439,31 @@ def trainAERNN(
 
         epochs_so_far = 0
         for i in range(0, starting_lr_idx):
-            if type(epochs) == type(list):
+            try:
                 if i < len(epochs):
                     epochs_i = epochs[i]
                 epochs_so_far += epochs_i
-            else:
+            except:
                 epochs_so_far += epochs
 
         for i in range(starting_lr_idx, len(learning_rate_list)):
             learning_rate = learning_rate_list[i]
-            if type(patience) == type([]):
+            try:
                 if i < len(patience):
                     patience_thislr = patience[i]
                 else:
                     patience_thislr = patience[-1]
-            else:
+            except:
                 patience_thislr = patience
-            if type(epochs) == type([]):
+            sum_patience += patience_thislr
+            try:
                 if i < len(epochs):
                     epochs_thislr = epochs[i]
                 else:
                     epochs_thislr = epochs[-1]
-            else:
+            except:
                 epochs_thislr = epochs
+            sum_epochs += epochs_thislr
                 
 
             tf.keras.backend.set_value(AR_AERNN_net.optimizer.lr, learning_rate)
@@ -470,12 +478,13 @@ def trainAERNN(
             # savelosses_cb.update_lr_idx(i)
             
             early_stopping_cb = tf.keras.callbacks.EarlyStopping(
-                monitor='val_NMSE',
+                monitor='val_NMSE_wt',
                 patience=patience_thislr,
                 restore_best_weights=True,
                 verbose=True,
                 min_delta=min_delta,
-                baseline=baseline
+                baseline=baseline,
+                mode="min",
             )
             #** the two lines below are useless because wait is set to 0 in on_train_begin
             # early_stopping_cb.wait = earlystopping_wait
@@ -545,33 +554,23 @@ def trainAERNN(
             
             epochs_so_far += epochs_thislr
             
-            baseline = None
+            baseline_contender = np.min(val_NMSE_wt_hist[lr_change[i]:lr_change[i+1]])
+            baseline = min(baseline, baseline_contender)
+            print('\nbaseline : {:.4E}'.format(baseline))
             
     if behaviour == 'initialiseAndTrainFromScratch' or behaviour == 'loadCheckpointAndContinueTraining':
-        # test_loss = rnn_net.evaluate(
-        #     testing_data_rnn_input, testing_data_rnn_output,
-        # )
+        val_nmse_wt_last = np.min(val_NMSE_wt_hist[lr_change[-2]:lr_change[-1]])
+        if val_nmse_wt_last >= baseline_og:
+            AR_AERNN_net.rnn_net.load_weights_from_file(wt_file_rnn)
+        
         for i_en in range(len(AR_AERNN_net.rnn_net.rnn_list)):
             for layer in AR_AERNN_net.rnn_net.rnn_list[i_en]:
                 if layer.stateful == True:
                     layer.reset_states()
-        # print(testing_data_rnn_input.shape, testing_data_rnn_output.shape)
-        
-        test_mse = 0.0
-        for i in range(int(testing_data_rnn_input.shape[0]//batch_size)):
-            # i_test_loss = rnn_net.evaluate(
-            #     testing_data_rnn_input[i*batch_size:(i+1)*batch_size, :, :],
-            #     testing_data_rnn_output[i*batch_size:(i+1)*batch_size, :, :],
-            # )
-            data_in_i = testing_data_rnn_input[i*batch_size:(i+1)*batch_size, :, :]
-            data_out_i = testing_data_rnn_output[i*batch_size:(i+1)*batch_size, :, :]
-            temp = AR_AERNN_net.call(data_in_i, training=False)
-            i_test_mse = np.mean(
-                (
-                    (data_out_i - temp.numpy()) * normalization_constant_arr_aedata[1, :] / time_stddev_ogdata
-                )**2
-            )
-            test_mse = (i*test_mse + i_test_mse)/(i+1)
+        test_loss_tuple = AR_AERNN_net.evaluate(
+            testing_data_rnn_input, testing_data_rnn_output,
+            batch_size=batch_size
+        )
 
         save_path = dir_name_AR_AErnn+'/final_net/{}_outsteps'.format(num_outsteps)
 
@@ -582,7 +581,10 @@ def trainAERNN(
         with open(save_path+'/losses-{}_outsteps.txt'.format(num_outsteps), 'w') as f:
             f.write(str({
                 'lr_change':lr_change,
-                'test_mse':test_mse,
+                'test_loss':test_loss_tuple[0],
+                'test_mse':test_loss_tuple[1],
+                'test_NMSE':test_loss_tuple[2],
+                'test_NMSE_wt':test_loss_tuple[3], 
                 'clipnorm':clipnorm,
                 'global_clipnorm':global_clipnorm,
                 'val_loss_hist':val_loss_hist,
@@ -626,8 +628,9 @@ def trainAERNN(
         legend_kwargs=legend_kwargs,
     )
     plt.savefig(dir_name_plot+'/loss_history-{}_outsteps.pdf'.format(num_outsteps), dpi=300, bbox_inches='tight')
-    plt.show()
-    plt.clf()
+    # plt.show()
+    # plt.clf()
+    plt.close()
     
     
     fig, ax = plot_losses(
@@ -643,8 +646,9 @@ def trainAERNN(
         legend_kwargs=legend_kwargs,
     )
     plt.savefig(dir_name_plot+'/MSE_history-{}_outsteps.pdf'.format(num_outsteps), dpi=300, bbox_inches='tight')
-    plt.show()
-    plt.clf()
+    # plt.show()
+    # plt.clf()
+    plt.close('all')
     
     fig, ax = plot_losses(
         training_loss=train_NMSE_hist,
@@ -659,8 +663,9 @@ def trainAERNN(
         legend_kwargs=legend_kwargs,
     )
     plt.savefig(dir_name_plot+'/NMSE_history-{}_outsteps.pdf'.format(num_outsteps), dpi=300, bbox_inches='tight')
-    plt.show()
-    plt.clf()
+    # plt.show()
+    # plt.clf()
+    plt.close('all')
     
     fig, ax = plot_losses(
         training_loss=train_NMSE_wt_hist,
@@ -675,8 +680,9 @@ def trainAERNN(
         legend_kwargs=legend_kwargs,
     )
     plt.savefig(dir_name_plot+'/NMSE_wt_history-{}_outsteps.pdf'.format(num_outsteps), dpi=300, bbox_inches='tight')
-    plt.show()
-    plt.clf()
+    # plt.show()
+    # plt.clf()
+    plt.close('all')
     
     fig, ax = plot_losses(
         training_loss=train_global_gradnorm_hist,
@@ -692,8 +698,9 @@ def trainAERNN(
         legend_kwargs=legend_kwargs,
     )
     plt.savefig(dir_name_plot+'/train_global_gradnorm_history-{}_outsteps.pdf'.format(num_outsteps), dpi=300, bbox_inches='tight')
-    plt.show()
-    plt.clf()
+    # plt.show()
+    # plt.clf()
+    plt.close('all')
 
     if len(rho_res_hist) > 0:
         temp = [[elem for elem in lst] for lst in rho_res_hist[0]]
@@ -731,8 +738,9 @@ def trainAERNN(
             legend_kwargs=legend_kwargs,
         )
         plt.savefig(dir_name_plot+'/rho_res_history-{}_outsteps.pdf'.format(num_outsteps), dpi=300, bbox_inches='tight')
-        plt.show()
-        plt.clf()
+        # plt.show()
+        # plt.clf()
+        plt.close('all')
 
     if len(alpha_hist) > 0:
         temp = [[elem for elem in lst] for lst in alpha_hist[0]]
@@ -770,8 +778,9 @@ def trainAERNN(
             legend_kwargs=legend_kwargs,
         )
         plt.savefig(dir_name_plot+'/alpha_history-{}_outsteps.pdf'.format(num_outsteps), dpi=300, bbox_inches='tight')
-        plt.show()
-        plt.clf()
+        # plt.show()
+        # plt.clf()
+        plt.close('all')
 
     if len(omega_in_hist) > 0:
         temp = [[elem for elem in lst] for lst in omega_in_hist[0]]
@@ -809,8 +818,9 @@ def trainAERNN(
             legend_kwargs=legend_kwargs,
         )
         plt.savefig(dir_name_plot+'/omega_in_history-{}_outsteps.pdf'.format(num_outsteps), dpi=300, bbox_inches='tight')
-        plt.show()
-        plt.clf()
+        # plt.show()
+        # plt.clf()
+        plt.close('all')
  
 
     ### cleaning up

@@ -1,0 +1,5 @@
+dir_name, num_latent_states
+ae_007, 2
+ae_006, 3
+ae_005, 4
+ae_008, 5

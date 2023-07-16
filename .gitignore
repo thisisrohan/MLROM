@@ -14,3 +14,4 @@ __pycache__/
 /new_ks/saved_rnn/rnn_003/checkpoints/checkpoint.data-00000-of-00001
 /new_ks/saved_rnn/rnn_003/final_net/final_net_gru_weights.h5
 /new_ks/saved_rnn/rnn_004/checkpoints/checkpoint.data-00000-of-00001
+/new_cdv/saved_AR_AEESN_rnn/*/checkpoints/*

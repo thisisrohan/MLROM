@@ -1,0 +1,1 @@
+{'params_mat': array([[10.        , 28.        ,  2.66666667]]), 'init_state_mat': array([[-6.03962921, -2.59727929, 28.64896526]]), 't0': 0.0, 'T': 42000.0, 'delta_t': 0.01, 'return_params_arr': False, 'dir_name_ae': '/home/rkaushik/Documents/Thesis/MLROM/new_lorenz/saved_ae/ae_024', 'normalize_dataset': True, 'stddev_multiplier': 3, 'use_ae_data': True}

@@ -1,0 +1,1 @@
+{'num_wavenumbers': 65, 'num_wavenumber_pairs': 32, 'Re': 40.0, 'dt': 0.01, 'dTr': 0.25, 'T_transient': 250.0, 'T': 30000.0, 'N_ref': 50, 'n': 4.0, 'prng_seed': 42}

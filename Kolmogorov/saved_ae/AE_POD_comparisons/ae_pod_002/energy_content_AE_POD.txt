@@ -1,0 +1,5 @@
+   kernel_size_list : [3 5 7], [3 5 7], [3 5 7], [3 5 7]
+attention_used_list : True, True, True, True
+  latent_space_size : 18, 27, 36, 45
+                 AE : 98.7220 %, 98.4434 %, 99.5744 %, 99.2451 %
+                POD : 94.6081 %, 96.7138 %, 98.0849 %, 98.9820 %

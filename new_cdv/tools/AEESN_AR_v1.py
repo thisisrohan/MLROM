@@ -360,15 +360,15 @@ class AR_AERNN_ESN(Model):
         
         # print(x.shape, y.shape, sample_weight, sw_cov)
         
-        # _warmup_upto_tinputminusone_tuple = self._warmup_upto_tinputminusone(
-        #     x, training=True, usenoiseflag=True
-        # )
+        _warmup_upto_tinputminusone_tuple = self._warmup_upto_tinputminusone(
+            x, training=True, usenoiseflag=True
+        )
         
         with tf.GradientTape() as tape:
-            ypred = self.call(x, training=True, usenoiseflag=True)
-            # ypred = self._call_for_train(
-            #     x[:, -1:, :], _warmup_upto_tinputminusone_tuple, training=True
-            # )
+            # ypred = self.call(x, training=True, usenoiseflag=True)
+            ypred = self._call_for_train(
+                x[:, -1:, :], _warmup_upto_tinputminusone_tuple, training=True
+            )
             loss = self.compiled_loss(
                 y,
                 ypred,
@@ -433,16 +433,16 @@ class AR_AERNN_ESN(Model):
         return self.compute_metrics(x, y, ypred, sample_weight, covmat_fro_loss, global_gradnorm)
     
     def compute_metrics(self, x, y, y_pred, sample_weight, covmat_fro_loss=0.0, global_gradnorm=0.0):
-        metric_results = super(AR_AERNN_ESN, self).compute_metrics(x, y, y_pred, sample_weight)
+        metric_results = super().compute_metrics(x, y, y_pred, sample_weight)
         # return_dict = self.get_metrics_result()
         metric_results['covmat_fro_loss'] = covmat_fro_loss
         metric_results['global_gradnorm'] = global_gradnorm
-        for i in range(len(self.rnn_net.rnn_list)):
-            metric_results['rho_res_{}'.format(i)] = self.rnn_net.rnn_list[i].cell.rho_res
-        for i in range(len(self.rnn_net.rnn_list)):
-            metric_results['alpha_{}'.format(i)] = self.rnn_net.rnn_list[i].cell.alpha
-        for i in range(len(self.rnn_net.rnn_list)):
-            metric_results['omega_in_{}'.format(i)] = self.rnn_net.rnn_list[i].cell.omega_in
+        # for i in range(len(self.rnn_net.rnn_list)):
+        #     metric_results['rho_res_{}'.format(i)] = self.rnn_net.rnn_list[i].cell.rho_res
+        # for i in range(len(self.rnn_net.rnn_list)):
+        #     metric_results['alpha_{}'.format(i)] = self.rnn_net.rnn_list[i].cell.alpha
+        # for i in range(len(self.rnn_net.rnn_list)):
+        #     metric_results['omega_in_{}'.format(i)] = self.rnn_net.rnn_list[i].cell.omega_in
         return metric_results
     
 

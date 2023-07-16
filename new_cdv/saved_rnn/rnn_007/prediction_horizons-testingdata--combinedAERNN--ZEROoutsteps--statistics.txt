@@ -1,0 +1,11 @@
+ORIGINAL (multi-point) ERROR; error_threshold = 0.5
+prediction_horizon : 0.20762120806792145, median : 0.06771728899801743
+ph_min : 0.0, ph_max : 1.9096275497440918
+stddev : 0.36646532196077997, IQR : 0.23023878259325928
+1st quartile : 0.0, 3rd quartile : 0.23023878259325928
+
+NEW (cumulative) ERROR; error_threshold = 0.5
+prediction_horizon : 0.20531882024198883, median : 0.08126074679762092
+ph_min : 0.0, ph_max : 1.9096275497440918
+stddev : 0.3645113918824882, IQR : 0.23023878259325928
+1st quartile : 0.0, 3rd quartile : 0.23023878259325928

@@ -1,0 +1,12 @@
+      training_data_rnn_input.shape : (352, 222, 5)
+     training_data_rnn_output.shape : (352, 222, 5)
+       testing_data_rnn_input.shape : (64, 222, 5)
+      testing_data_rnn_output.shape : (64, 222, 5)
+           val_data_rnn_input.shape : (32, 222, 5)
+          val_data_rnn_output.shape : (32, 222, 5)
+
+    AR_testing_data_rnn_input.shape : (100, 74, 6)
+   AR_testing_data_rnn_output.shape : (100, 222, 6)
+
+ AR_ls_testing_data_rnn_input.shape : (100, 74, 5)
+AR_ls_testing_data_rnn_output.shape : (100, 222, 5)

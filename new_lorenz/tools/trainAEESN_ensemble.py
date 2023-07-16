@@ -331,7 +331,9 @@ def trainAERNN(
         clipnorm=clipnorm,
         global_clipnorm=global_clipnorm,
     )
-
+    # AR_AERNN_net.ae_net.trainable = False
+    # print(AR_AERNN_net.ae_net.encoder_net.trainable)
+    # print(AR_AERNN_net.ae_net.decoder_net.trainable)
     # AR_AERNN_net.build(input_shape=(batch_size,)+training_data_rnn_input.shape[1:])
 
     
@@ -403,6 +405,8 @@ def trainAERNN(
 
     ### training AR AE-RNN
     if behaviour == 'initialiseAndTrainFromScratch' or behaviour == 'loadCheckpointAndContinueTraining':
+        sum_patience = 0
+        sum_epochs = 0
         # implementing early stopping
         baseline = None
         if behaviour == 'loadCheckpointAndContinueTraining':
@@ -449,6 +453,7 @@ def trainAERNN(
                     patience_thislr = patience[-1]
             else:
                 patience_thislr = patience
+            sum_patience += patience_thislr
             if type(epochs) == type([]):
                 if i < len(epochs):
                     epochs_thislr = epochs[i]
@@ -456,6 +461,7 @@ def trainAERNN(
                     epochs_thislr = epochs[-1]
             else:
                 epochs_thislr = epochs
+            sum_epochs += epochs_thislr
                 
 
             tf.keras.backend.set_value(AR_AERNN_net.optimizer.lr, learning_rate)
@@ -548,30 +554,33 @@ def trainAERNN(
             baseline = None
             
     if behaviour == 'initialiseAndTrainFromScratch' or behaviour == 'loadCheckpointAndContinueTraining':
-        # test_loss = rnn_net.evaluate(
-        #     testing_data_rnn_input, testing_data_rnn_output,
-        # )
+        if len(val_loss_hist) <= sum_patience + 1 and len(val_loss_hist) <= sum_epochs:
+            AR_AERNN_net.rnn_net.load_weights_from_file(wt_file_rnn)
         for i_en in range(len(AR_AERNN_net.rnn_net.rnn_list)):
             for layer in AR_AERNN_net.rnn_net.rnn_list[i_en]:
                 if layer.stateful == True:
                     layer.reset_states()
+        test_loss_tuple = AR_AERNN_net.evaluate(
+            testing_data_rnn_input, testing_data_rnn_output,
+            batch_size=batch_size
+        )
         # print(testing_data_rnn_input.shape, testing_data_rnn_output.shape)
         
-        test_mse = 0.0
-        for i in range(int(testing_data_rnn_input.shape[0]//batch_size)):
-            # i_test_loss = rnn_net.evaluate(
-            #     testing_data_rnn_input[i*batch_size:(i+1)*batch_size, :, :],
-            #     testing_data_rnn_output[i*batch_size:(i+1)*batch_size, :, :],
-            # )
-            data_in_i = testing_data_rnn_input[i*batch_size:(i+1)*batch_size, :, :]
-            data_out_i = testing_data_rnn_output[i*batch_size:(i+1)*batch_size, :, :]
-            temp = AR_AERNN_net.call(data_in_i, training=False)
-            i_test_mse = np.mean(
-                (
-                    (data_out_i - temp.numpy()) * normalization_constant_arr_aedata[1, :] / time_stddev_ogdata
-                )**2
-            )
-            test_mse = (i*test_mse + i_test_mse)/(i+1)
+        # test_mse = 0.0
+        # for i in range(int(testing_data_rnn_input.shape[0]//batch_size)):
+        #     # i_test_loss = rnn_net.evaluate(
+        #     #     testing_data_rnn_input[i*batch_size:(i+1)*batch_size, :, :],
+        #     #     testing_data_rnn_output[i*batch_size:(i+1)*batch_size, :, :],
+        #     # )
+        #     data_in_i = testing_data_rnn_input[i*batch_size:(i+1)*batch_size, :, :]
+        #     data_out_i = testing_data_rnn_output[i*batch_size:(i+1)*batch_size, :, :]
+        #     temp = AR_AERNN_net.call(data_in_i, training=False)
+        #     i_test_mse = np.mean(
+        #         (
+        #             (data_out_i - temp.numpy()) * normalization_constant_arr_aedata[1, :] / time_stddev_ogdata
+        #         )**2
+        #     )
+        #     test_mse = (i*test_mse + i_test_mse)/(i+1)
 
         save_path = dir_name_AR_AErnn+'/final_net/{}_outsteps'.format(num_outsteps)
 
@@ -582,7 +591,10 @@ def trainAERNN(
         with open(save_path+'/losses-{}_outsteps.txt'.format(num_outsteps), 'w') as f:
             f.write(str({
                 'lr_change':lr_change,
-                'test_mse':test_mse,
+                'test_loss':test_loss_tuple[0],
+                'test_mse':test_loss_tuple[1],
+                'test_NMSE':test_loss_tuple[2],
+                'test_NMSE_wt':test_loss_tuple[3], 
                 'clipnorm':clipnorm,
                 'global_clipnorm':global_clipnorm,
                 'val_loss_hist':val_loss_hist,

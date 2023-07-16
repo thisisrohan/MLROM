@@ -1,0 +1,9 @@
+i : 8, name : attention_module, lambda_att : 0.37849026918411255
+i : 13, name : attention_module_1, lambda_att : 0.176545649766922
+i : 18, name : attention_module_2, lambda_att : 0.017877576872706413
+i : 8, name : attention_module_3, lambda_att : 0.4489439129829407
+i : 13, name : attention_module_4, lambda_att : 0.2997450828552246
+i : 18, name : attention_module_5, lambda_att : 0.09386926889419556
+i : 8, name : attention_module_6, lambda_att : -0.6143278479576111
+i : 13, name : attention_module_7, lambda_att : -0.6021516919136047
+i : 18, name : attention_module_8, lambda_att : -0.21227729320526123

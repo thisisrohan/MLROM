@@ -1,0 +1,1 @@
+{'val_loss_hist': [0.0, 0.0], 'train_loss_hist': [0.0, 0.0], 'test_loss': 2.9775151233479846e-06}

@@ -1,0 +1,1 @@
+{'data_dir_idx': '002', 'normalizeforae_flag': True, 'normalization_type': 'stddev', 'stddev_multiplier': 3, 'ae_data_with_params': False, 'module': 'tools.ae_v11'}

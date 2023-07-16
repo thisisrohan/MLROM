@@ -1,0 +1,2 @@
+dir_name, num_latent_states
+ae_024, 2

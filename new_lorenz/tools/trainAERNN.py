@@ -337,7 +337,7 @@ def trainAERNN(
         loss=AERNN_loss(divisor_arr=time_stddev, loss_weights=loss_weights),#_ogdata/normalization_constant_arr_aedata[1, :]),
         run_eagerly=False,
         # loss_weights=loss_weights,
-        metrics=['mse', NMSE(divisor_arr=time_stddev)],
+        metrics=['mse', NMSE(divisor_arr=time_stddev), NMSE_wt(divisor_arr=time_stddev, loss_weights=loss_weights)],
     )
     
     if behaviour == 'initialiseAndTrainFromScratch':
@@ -385,6 +385,9 @@ def trainAERNN(
     train_NMSE_hist = []
     val_NMSE_hist = []
     
+    train_NMSE_wt_hist = []
+    val_NMSE_wt_hist = []
+    
     train_MSE_hist = []
     val_MSE_hist = []
     
@@ -397,6 +400,8 @@ def trainAERNN(
 
     ### training AR AE-RNN
     if behaviour == 'initialiseAndTrainFromScratch' or behaviour == 'loadCheckpointAndContinueTraining':
+        sum_patience = 0
+        sum_epochs = 0
         # implementing early stopping
         baseline = None
         if behaviour == 'loadCheckpointAndContinueTraining':
@@ -405,7 +410,7 @@ def trainAERNN(
             baseline = AR_AERNN_net.evaluate(
                 val_data_rnn_input, val_data_rnn_output,
             )
-            baseline = baseline[2] # val_NMSE of RNN with loaded weights
+            baseline = baseline[3] # val_NMSE_wt of RNN with loaded weights
             print('baseline : {:.4E}'.format(baseline))
 
         # time callback for each epoch
@@ -417,7 +422,7 @@ def trainAERNN(
             os.makedirs(dir_name_ckpt)
         checkpoint_cb = tf.keras.callbacks.ModelCheckpoint(
             filepath=dir_name_ckpt+'/checkpoint-{}_outsteps'.format(num_outsteps),#+'/checkpoint--loss={loss:.4f}--vall_loss={val_loss:.4f}',
-            monitor='val_NMSE',
+            monitor='val_NMSE_wt',
             save_best_only=True,
             save_weights_only=True,
             verbose=2,
@@ -443,6 +448,7 @@ def trainAERNN(
                     patience_thislr = patience[-1]
             else:
                 patience_thislr = patience
+            sum_patience += patience_thislr
             if type(epochs) == type([]):
                 if i < len(epochs):
                     epochs_thislr = epochs[i]
@@ -450,6 +456,7 @@ def trainAERNN(
                     epochs_thislr = epochs[-1]
             else:
                 epochs_thislr = epochs
+            sum_epochs += epochs_thislr
                 
 
             tf.keras.backend.set_value(AR_AERNN_net.optimizer.lr, learning_rate)
@@ -464,7 +471,7 @@ def trainAERNN(
             # savelosses_cb.update_lr_idx(i)
             
             early_stopping_cb = tf.keras.callbacks.EarlyStopping(
-                monitor='val_NMSE',
+                monitor='val_NMSE_wt',
                 patience=patience_thislr,
                 restore_best_weights=True,
                 verbose=True,
@@ -506,7 +513,10 @@ def trainAERNN(
             
             val_NMSE_hist.extend(history.history['val_NMSE'])
             train_NMSE_hist.extend(history.history['NMSE'])
-            
+
+            val_NMSE_wt_hist.extend(history.history['val_NMSE_wt'])
+            train_NMSE_wt_hist.extend(history.history['NMSE_wt'])
+
             val_MSE_hist.extend(history.history['val_mse'])
             train_MSE_hist.extend(history.history['mse'])
             
@@ -537,30 +547,17 @@ def trainAERNN(
             epochs_so_far += epochs_thislr
             
     if behaviour == 'initialiseAndTrainFromScratch' or behaviour == 'loadCheckpointAndContinueTraining':
-        # test_loss = rnn_net.evaluate(
-        #     testing_data_rnn_input, testing_data_rnn_output,
-        # )
+        if len(val_loss_hist) <= sum_patience and len(val_loss_hist) <= sum_epochs:
+            AR_AERNN_net.rnn_net.load_weights_from_file(wt_file_rnn)
         for layer in AR_AERNN_net.rnn_net.rnn_list:
             if layer.stateful == True:
                 layer.reset_states()
+        test_loss_tuple = AR_AERNN_net.evaluate(
+            testing_data_rnn_input, testing_data_rnn_output,
+            batch_size=batch_size
+        )
         # print(testing_data_rnn_input.shape, testing_data_rnn_output.shape)
         
-        test_mse = 0.0
-        for i in range(int(testing_data_rnn_input.shape[0]//batch_size)):
-            # i_test_loss = rnn_net.evaluate(
-            #     testing_data_rnn_input[i*batch_size:(i+1)*batch_size, :, :],
-            #     testing_data_rnn_output[i*batch_size:(i+1)*batch_size, :, :],
-            # )
-            data_in_i = testing_data_rnn_input[i*batch_size:(i+1)*batch_size, :, :]
-            data_out_i = testing_data_rnn_output[i*batch_size:(i+1)*batch_size, :, :]
-            temp = AR_AERNN_net.call(data_in_i, training=False)
-            i_test_mse = np.mean(
-                (
-                    (data_out_i - temp.numpy()) * normalization_constant_arr_aedata[1, :] / time_stddev_ogdata
-                )**2
-            )
-            test_mse = (i*test_mse + i_test_mse)/(i+1)
-
         save_path = dir_name_AR_AErnn+'/final_net'
 
         if not os.path.isdir(save_path):
@@ -570,7 +567,10 @@ def trainAERNN(
         with open(save_path+'/losses-{}_outsteps.txt'.format(num_outsteps), 'w') as f:
             f.write(str({
                 'lr_change':lr_change,
-                'test_mse':test_mse,
+                'test_loss':test_loss_tuple[0],
+                'test_mse':test_loss_tuple[1],
+                'test_NMSE':test_loss_tuple[2],
+                'test_NMSE_wt':test_loss_tuple[3],                
                 'clipnorm':clipnorm,
                 'global_clipnorm':global_clipnorm,
                 'val_loss_hist':val_loss_hist,
@@ -579,6 +579,8 @@ def trainAERNN(
                 'train_MSE_hist':train_MSE_hist,
                 'val_NMSE_hist':val_NMSE_hist,
                 'train_NMSE_hist':train_NMSE_hist,
+                'val_NMSE_wt_hist':val_NMSE_wt_hist,
+                'train_NMSE_wt_hist':train_NMSE_wt_hist,
                 'train_global_gradnorm_hist':train_global_gradnorm_hist,
                 'train_covmat_fro_loss_hist':train_covmat_fro_loss_hist,
                 'rho_res_hist':rho_res_hist,
@@ -636,6 +638,19 @@ def trainAERNN(
         ylabel='NMSE',
     )
     plt.savefig(dir_name_plot+'/NMSE_history-{}_outsteps.pdf'.format(num_outsteps), dpi=300, bbox_inches='tight')
+    plt.show()
+    plt.clf()
+    
+    fig, ax = plot_losses(
+        training_loss=train_NMSE_wt_hist,
+        val_loss=val_NMSE_wt_hist,
+        lr_change=lr_change,
+        learning_rate_list=learning_rate_list,
+        legend_list=['Training NMSE (weighted)', 'Validation NMSE (weighted)'],
+        xlabel='Epoch',
+        ylabel='NMSE (weighted)',
+    )
+    plt.savefig(dir_name_plot+'/NMSE_wt_history-{}_outsteps.pdf'.format(num_outsteps), dpi=300, bbox_inches='tight')
     plt.show()
     plt.clf()
     

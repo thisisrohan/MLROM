@@ -1,0 +1,5 @@
+   kernel_size_list : [3 5 7], [3 5 7], [3 5 7], [3 5 7]
+attention_used_list : True, True, True, True
+  latent_space_size : 18, 27, 36, 45
+                 AE : 1.6167E-03, 1.2908E-03, 1.1445E-03, 1.0020E-03
+                POD : 3.1104E-03, 2.4712E-03, 1.8747E-03, 1.3933E-03
