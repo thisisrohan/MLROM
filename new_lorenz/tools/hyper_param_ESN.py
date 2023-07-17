@@ -510,6 +510,9 @@ def trainESN_and_return_PH(
             for layer in rnn_net.ESN_layers:
                 layer.reset_states()
 
+            val_mse = 0
+            train_mse = 0
+            '''
             print('\nval mse')
             
             val_mse = 0
@@ -550,7 +553,7 @@ def trainESN_and_return_PH(
 
             for layer in rnn_net.ESN_layers:
                 layer.reset_states()
-
+            '''
             val_loss_hist.append(val_mse)
             train_loss_hist.append(train_mse)
 
@@ -648,7 +651,9 @@ def trainESN_and_return_PH(
     
     avg_time = 0.
     prediction_horizon_arr = np.empty(shape=num_runs)
-    prediction_lst = np.array(AR_AERNN_net.call(AR_testing_data_rnn_input, training=False))[0]
+    prediction_lst = np.array(AR_AERNN_net.call(AR_testing_data_rnn_input, training=False))
+    if len(prediction_lst.shape) == 4:
+        prediction_lst = prediction_lst[0]
     prediction_lst = invert_normalization(prediction_lst, ae_data_normalization_arr)
     for i in range(num_runs):
         run_time = time.time()
@@ -672,7 +677,7 @@ def trainESN_and_return_PH(
 
         ### Error and prediction horizon
         # error = np.linalg.norm(data_out[:, :] - prediction[i, :, :], axis=1)
-        error = (data_out[:, :] - prediction_lst[:, :])**2
+        error = (data_out[:, :] - prediction_lst[i])**2
         # error /= norm_sq_time_average(data_out)**0.5
         error = np.mean(np.divide(error, time_stddev_ogdata**2), axis=1)**0.5
 
@@ -687,14 +692,14 @@ def trainESN_and_return_PH(
         run_time = time.time() - run_time
         avg_time = (avg_time*i + run_time)/(i+1)
         eta = avg_time * (num_runs-1 - i)
-        print('    {} / {} -- run_time : {:.2f} s -- eta : {:.0f}h {:.0f}m {:.0f}s'.format(
-            i+1,
-            num_runs,
-            run_time,
-            float(eta // 3600),
-            float((eta%3600)//60),
-            float((eta%3600)%60),
-        ))
+        # print('    {} / {} -- run_time : {:.2f} s -- eta : {:.0f}h {:.0f}m {:.0f}s'.format(
+        #     i+1,
+        #     num_runs,
+        #     run_time,
+        #     float(eta // 3600),
+        #     float((eta%3600)//60),
+        #     float((eta%3600)%60),
+        # ))
 
     median_idx = int(np.round(0.5*num_runs-1))
     quartile_1_idx = int(np.round(0.25*num_runs-1))

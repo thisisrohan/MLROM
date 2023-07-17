@@ -423,8 +423,8 @@ def main(esn_dir_idx, num_lyaptimesteps_totrain, gpu_to_use, epochs, patience):
     if behaviour == 'initialiseAndTrainFromScratch':
         learning_rate_list = [
             # [1e-3, 5e-4, 1e-4],
-            [1e-4, 5e-5, 1e-5],
-            [1e-5, 5e-6, 1e-6],
+            [1e-4, 5e-5],# 1e-5],
+            [1e-5, 5e-6],# 1e-6],
             [1e-6, 5e-7, 1e-7],
             # [1e-6, 5e-7, 1e-7],
             [1e-6, 1e-7, 1e-8],
@@ -445,7 +445,7 @@ def main(esn_dir_idx, num_lyaptimesteps_totrain, gpu_to_use, epochs, patience):
             # [50],
         ] # parameter for early stopping
         min_delta = 5e-6  # parameter for early stopping
-        lambda_reg = 1e-8  # weight for regularizer
+        lambda_reg = 1e-10  # weight for regularizer
         covmat_lmda = 1e-4  # weight for the covmat loss
 
         if loss_weights is None:
@@ -605,8 +605,8 @@ def main(esn_dir_idx, num_lyaptimesteps_totrain, gpu_to_use, epochs, patience):
         load_dir = dir_name_ARrnn+'/final_net/{}_outsteps'.format(num_outsteps)
         load_file_rnn, wt_file_rnn = find_and_return_load_wt_file_lists(
             load_dir,
-            wt_matcher='rnn_weights.hdf5',
-            classdict_matcher='rnn_class_dict.txt'
+            wt_matcher='ESN_weights.hdf5',
+            classdict_matcher='ESN_class_dict.txt'
         )
         
         load_file_ae = load_dir + '/final_net-{}_outsteps_ae_class_dict.txt'.format(num_outsteps)

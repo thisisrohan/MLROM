@@ -1,120 +1,109 @@
 #!/usr/bin/env python
 # coding: utf-8
 
+import os
+import math
+from collections import OrderedDict
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy import linalg
+
+import time as time
+import platform as platform
+
+import tensorflow as tf
+from tensorflow.keras import layers, losses
+from tensorflow.keras.models import Model
+from tensorflow.keras import backend as K
+from tensorflow.keras.regularizers import L2
+from keras.engine import data_adapter
+import h5py
+
+import importlib
+
+tf.keras.backend.set_floatx('float32')
+
+plt.rcParams.update({
+    "text.usetex":True,
+    "font.family":"serif"
+})
+
 from numpy import *
-def main(esn_dir_idx, num_lyaptimesteps_totrain, gpu_to_use):
-    import os
-    import math
-    from collections import OrderedDict
-    import numpy as np
-    import matplotlib.pyplot as plt
-    from scipy import linalg
 
-    import time as time
-    import platform as platform
+FTYPE = np.float32
+ITYPE = np.int32
 
-    import tensorflow as tf
-    from tensorflow.keras import layers, losses
-    from tensorflow.keras.models import Model
-    from tensorflow.keras import backend as K
-    from tensorflow.keras.regularizers import L2
-    from keras.engine import data_adapter
-    import h5py
+array = np.array
+float32 = np.float32
+int32 = np.int32
+float64 = np.float64
+int64 = np.int64
 
-    tf.keras.backend.set_floatx('float32')
+def find_and_return_load_wt_file_lists(
+        load_dir,
+        wt_matcher='weights.hdf5',
+        classdict_matcher='class_dict.txt',
+    ):
+    contents_load_dir = [f for f in os.listdir(load_dir) if os.path.isfile(os.path.join(load_dir, f))]
+    load_files_lst = [f for f in contents_load_dir if f.endswith(classdict_matcher)]
+    wt_files_lst = [f for f in contents_load_dir if f.endswith(wt_matcher)]
 
-    plt.rcParams.update({
-        "text.usetex":True,
-        "font.family":"serif"
-    })
+    load_files_lst_startingidx = []
+    for i in range(len(load_files_lst)):
+        fn = load_files_lst[i]
+        idx = fn.find('_')
+        load_files_lst_startingidx.append(int(fn[0:idx]))
 
+    wt_files_lst_startingidx = []
+    for i in range(len(wt_files_lst)):
+        fn = wt_files_lst[i]
+        idx = fn.find('_')
+        wt_files_lst_startingidx.append(int(fn[0:idx]))
 
-    # In[3]:
+    load_files_sortidx = np.argsort(load_files_lst_startingidx)
+    wt_files_sortidx = np.argsort(wt_files_lst_startingidx)
 
+    load_files_lst = np.array(load_files_lst)[load_files_sortidx]
+    wt_files_lst = np.array(wt_files_lst)[wt_files_sortidx]
 
-    colab_flag = False
-    FTYPE = np.float32
-    ITYPE = np.int32
+    load_file_rnn = [load_dir + '/' + fn for fn in load_files_lst]
+    wt_file_rnn = [load_dir + '/' +  fn for fn in wt_files_lst]
+    
+    return load_file_rnn, wt_file_rnn
 
-    array = np.array
-    float32 = np.float32
-    int32 = np.int32
-    float64 = np.float64
-    int64 = np.int64
-
+from numpy import *
+def main(esn_dir_idx, num_lyaptimesteps_totrain, gpu_to_use, epochs, patience):
     strategy = None
     # strategy = tf.distribute.MirroredStrategy()
 
-
-    # In[4]:
-
-
     current_sys = platform.system()
-
     if current_sys == 'Windows':
         dir_sep = '\\'
     else:
         dir_sep = '/'
 
-
-    # In[5]:
-
-
-    if colab_flag == True:
-        from google.colab import drive
-        drive.mount('/content/drive')
-        os.chdir('/content/drive/MyDrive/Github/MLROM/KS/')
-
-
-    # In[6]:
-
-
     print(os.getcwd())
-
-
-    # In[7]:
-
-
-    from tools.misc_tools import create_data_for_RNN, mytimecallback, SaveLosses, plot_losses, plot_reconstructed_data_KS, plot_latent_states_KS , readAndReturnLossHistories, sigmoidWarmupAndDecayLRSchedule
+    from tools.misc_tools import create_data_for_RNN, mytimecallback, SaveLosses, plot_losses, readAndReturnLossHistories
     from tools.ae_v2 import Autoencoder
     from tools.ESN_v2_ensembleAR import ESN_ensemble as AR_RNN
     from tools.AEESN_AR_v1 import AR_AERNN_ESN as AR_AERNN
     from tools.trainAEESN_ensemble import trainAERNN
 
-
-    # In[8]:
-
-
     behaviour = 'initialiseAndTrainFromScratch'
     # behaviour = 'loadCheckpointAndContinueTraining'
     # behaviour = 'loadFinalNetAndPlot'
 
-
-    # In[ ]:
-
-
-
-
-
-    # In[9]:
-
-
     gpus = tf.config.list_physical_devices('GPU')
     print(gpus)
 
-    if colab_flag == False:
-        if strategy is None:
-            if gpus:
-                # gpu_to_use = 1
-                tf.config.set_visible_devices(gpus[gpu_to_use], 'GPU')
-        logical_devices = tf.config.list_logical_devices('GPU')
-        print(logical_devices)
-
-
-    # In[10]:
-
-
-    # print(tf.test.gpu_device_name())
+    if strategy is None:
+        if gpus:
+            # gpu_to_use = 1
+            tf.config.set_visible_devices(gpus[gpu_to_use], 'GPU')
+            # tf.config.set_visible_devices([], 'GPU')
+    logical_devices = tf.config.list_logical_devices('GPU')
+    
+    print(logical_devices)
     print(tf.config.list_physical_devices())
     print('')
     print(tf.config.list_logical_devices())
@@ -122,11 +111,7 @@ def main(esn_dir_idx, num_lyaptimesteps_totrain, gpu_to_use):
     print(tf.__version__)
 
 
-    # # KS System
-
-    # In[11]:
-
-
+    ###--- CDV System ---###
     # setting up params (and saving, if applicable)
 
     if behaviour == 'initialiseAndTrainFromScratch':
@@ -370,64 +355,16 @@ def main(esn_dir_idx, num_lyaptimesteps_totrain, gpu_to_use):
     np.random.seed(prng_seed)
     tf.random.set_seed(prng_seed)
 
-
-    # In[ ]:
-
-
-
-
-
-    # In[12]:
-
-
     lyapunov_time_arr = np.empty(shape=lyapunov_spectrum_mat.shape[0], dtype=FTYPE)
     for i in range(lyapunov_spectrum_mat.shape[0]):
         lyapunov_time_arr[i] = 1/lyapunov_spectrum_mat[i, 0]
         print('Case : {}, lyapunov exponent : {}, lyapunov time : {}s'.format(i+1, lyapunov_spectrum_mat[i, 0], lyapunov_time_arr[i]))
-
-
-    # In[ ]:
-
-
-
-
-
-    # In[ ]:
-
-
-
-
-
-    # In[13]:
-
 
     # delaing with normalizing the data before feeding into autoencoder
     num_params = params_mat.shape[1]
     og_vars = all_data.shape[1]
     if alldata_withparams_flag == True:
         og_vars -= num_params
-
-    # if use_ae_data == True:
-    #     if ae_data_with_params == True and alldata_withparams_flag == False:
-    #         new_all_data = np.empty(shape=(all_data.shape[0], og_vars+num_params), dtype=FTYPE)
-    #         new_all_data[:, 0:og_vars] = all_data[:, 0:og_vars]
-    #         del(all_data)
-    #         all_data = new_all_data
-    #         prev_idx = 0
-    #         for i in range(boundary_idx_arr.shape[0]):
-    #             all_data[prev_idx:boundary_idx_arr[i], num_params:] = params_mat[i]
-    #             prev_idx = boundary_idx_arr[i]
-
-    #     if normalizeforae_flag == True:
-    #         for i in range(all_data.shape[1]):
-    #             all_data[:, i] -= normalization_constant_arr_aedata[0, i]
-    #             all_data[:, i] /= normalization_constant_arr_aedata[1, i]
-
-    #     if ae_data_with_params == False:
-    #         all_data = all_data[:, 0:og_vars]
-    # else:
-    #     # using raw data, neglecting the params attached (if any)
-    #     all_data = all_data[:, 0:og_vars]
 
     if use_ae_data == True and ae_data_with_params == False:
         all_data = all_data[:, 0:og_vars]
@@ -437,44 +374,11 @@ def main(esn_dir_idx, num_lyaptimesteps_totrain, gpu_to_use):
     normalization_constant_arr_aedata = normalization_constant_arr_aedata[:, 0:all_data.shape[1]]
 
 
-    # In[14]:
-
-
-    # In[15]:
-
-
     print('all_data.shape : ', all_data.shape)
     print('all_data.dtype : ', all_data.dtype)
 
 
-    # # Autoencoder
-
-    # In[16]:
-
-
-    # if use_ae_data == True:
-    #     load_file = dir_name_ae+dir_sep+'final_net'+dir_sep+'final_net_class_dict.txt'
-    #     wt_file = dir_name_ae+dir_sep+'final_net'+dir_sep+'final_net_ae_weights.h5'
-
-
-    # In[17]:
-
-
-    # if use_ae_data == True:
-    #     ae_net = Autoencoder(all_data.shape[1], load_file=load_file)
-    #     ae_net.load_weights_from_file(wt_file)
-
-
-    # In[ ]:
-
-
-
-
-
-    # # ESN
-
-    # In[18]:
-
+    ###--- ESN ---###
 
     if behaviour == 'initialiseAndTrainFromScratch':
         # RNN data parameters
@@ -516,41 +420,33 @@ def main(esn_dir_idx, num_lyaptimesteps_totrain, gpu_to_use):
         with open(dir_name_ARrnn+dir_sep+'AR_RNN_specific_data.txt', 'w') as f:
             f.write(str(AR_RNN_specific_data))
 
-
-    # In[ ]:
-
-
-
-
-
-    # In[19]:
-
-
     # setting up training params
     if behaviour == 'initialiseAndTrainFromScratch':
         learning_rate_list = [
-            [1e-3, 5e-4, 1e-4],
-            [1e-4, 5e-5, 1e-5],
+            # [1e-3, 5e-4, 1e-4],
+            # [1e-4, 5e-5, 1e-5],
             [1e-5, 5e-6, 1e-6],
             [1e-6, 5e-7, 1e-7],
-            # [5e-7],
+            # [1e-6, 5e-7, 1e-7],
+            [1e-6, 1e-7, 1e-8],
+            [1e-6, 1e-7, 1e-8],
         ]
         epochs = [
-            [200]*len(learning_rate_list[0]),
-            [200]*len(learning_rate_list[1]),
-            [200]*len(learning_rate_list[2]),
-            [200]*len(learning_rate_list[3]),
+            [epochs]*len(learning_rate_list[0]),
+            [epochs]*len(learning_rate_list[1]),
+            [epochs]*len(learning_rate_list[2]),
+            [epochs]*len(learning_rate_list[3]),
             # [1000],
         ]
         patience = [
-            [10]*len(learning_rate_list[0]),
-            [10]*len(learning_rate_list[1]),
-            [10]*len(learning_rate_list[2]),
-            [10]*len(learning_rate_list[3]),
+            [patience]*len(learning_rate_list[0]),
+            [patience]*len(learning_rate_list[1]),
+            [patience]*len(learning_rate_list[2]),
+            [patience]*len(learning_rate_list[3]),
             # [50],
         ] # parameter for early stopping
-        min_delta = 1e-6  # parameter for early stopping
-        lambda_reg = 1e-9  # weight for regularizer
+        min_delta = 5e-6  # parameter for early stopping
+        lambda_reg = 5e-12  # weight for regularizer
         covmat_lmda = 1e-4  # weight for the covmat loss
 
         if loss_weights is None:
@@ -596,10 +492,6 @@ def main(esn_dir_idx, num_lyaptimesteps_totrain, gpu_to_use):
             normalization_arr=[normalization_arr_rnn],
         )
 
-
-    # In[20]:
-
-
     rnn_kwargs = {}
     if behaviour == 'initialiseAndTrainFromScratch' or behaviour == 'loadCheckpointAndContinueTraining':
         load_file_rnn = dir_name_rnn + '/final_net/final_net_class_dict.txt'
@@ -615,76 +507,9 @@ def main(esn_dir_idx, num_lyaptimesteps_totrain, gpu_to_use):
             'wts_to_be_loaded':True,
         }
 
-
-    # In[21]:
-
-
-    def find_and_return_load_wt_file_lists(
-            load_dir,
-            wt_matcher='weights.hdf5',
-            classdict_matcher='class_dict.txt',
-        ):
-        contents_load_dir = [f for f in os.listdir(load_dir) if os.path.isfile(os.path.join(load_dir, f))]
-        load_files_lst = [f for f in contents_load_dir if f.endswith(classdict_matcher)]
-        wt_files_lst = [f for f in contents_load_dir if f.endswith(wt_matcher)]
-
-        load_files_lst_startingidx = []
-        for i in range(len(load_files_lst)):
-            fn = load_files_lst[i]
-            idx = fn.find('_')
-            load_files_lst_startingidx.append(int(fn[0:idx]))
-
-        wt_files_lst_startingidx = []
-        for i in range(len(wt_files_lst)):
-            fn = wt_files_lst[i]
-            idx = fn.find('_')
-            wt_files_lst_startingidx.append(int(fn[0:idx]))
-
-        load_files_sortidx = np.argsort(load_files_lst_startingidx)
-        wt_files_sortidx = np.argsort(wt_files_lst_startingidx)
-
-        load_files_lst = np.array(load_files_lst)[load_files_sortidx]
-        wt_files_lst = np.array(wt_files_lst)[wt_files_sortidx]
-
-        load_file_rnn = [load_dir + '/' + fn for fn in load_files_lst]
-        wt_file_rnn = [load_dir + '/' +  fn for fn in wt_files_lst]
-        
-        return load_file_rnn, wt_file_rnn
-
-
-    # In[ ]:
-
-
-
-
-
-    # In[ ]:
-
-
-
-
-
-    # In[ ]:
-
-
-
-
-
-    # In[ ]:
-
-
-
-
-
-    # In[22]:
-
-
+    
     load_dir = dir_name_rnn + '/final_net'
     load_file_rnn, wt_file_rnn = find_and_return_load_wt_file_lists(load_dir)
-
-
-    # In[23]:
-
 
     global_clipnorm = None
     for kk in range(len(T_sample_output)):
@@ -730,13 +555,13 @@ def main(esn_dir_idx, num_lyaptimesteps_totrain, gpu_to_use):
             create_data_for_RNN,
             Autoencoder,
             AR_RNN,
-            all_data,
+            all_data[0:int(all_data.shape[0]/4), :],
             AR_AERNN,
             dt_rnn=dt_rnn,
             T_sample_input=T_sample_input,
             T_sample_output=T_sample_output[kk],
             T_offset=T_offset,
-            boundary_idx_arr=boundary_idx_arr,
+            boundary_idx_arr=[int(all_data.shape[0]/4)],#boundary_idx_arr,
             delta_t=delta_t,
             params=params,
             normalize_dataset=normalize_dataset,
@@ -800,11 +625,11 @@ def main(esn_dir_idx, num_lyaptimesteps_totrain, gpu_to_use):
         # else:
         #     global_clipnorm = train_global_gradnorm_hist[-patience[kk][-1]]
 
-        # alpha1 = 0.9
-        # alpha2 = 0.1
-        # global_clipnorm = train_global_gradnorm_hist[0]
-        # for i in range(1, len(train_global_gradnorm_hist)):
-        #     global_clipnorm = alpha1*global_clipnorm + alpha2*train_global_gradnorm_hist[i]
+        alpha1 = 0.9
+        alpha2 = 0.1
+        global_clipnorm = train_global_gradnorm_hist[0]
+        for i in range(1, len(train_global_gradnorm_hist)):
+            global_clipnorm = alpha1*train_global_gradnorm_hist[i-1] + alpha2*train_global_gradnorm_hist[i]
 
         idxs_to_ignore = 1
         global_clipnorm_min = 3.0
@@ -818,9 +643,12 @@ if __name__ == '__main__':
     parser.add_argument('gpu_to_use', type=int)
     parser.add_argument('esn_dir_idx', type=int)
     parser.add_argument('num_lyaptimesteps_totrain', nargs='+', type=int)
+    parser.add_argument('-e', '--epochs', type=int, default=150)
+    parser.add_argument('-p', '--patience', type=int, default=10)
     
     args = parser.parse_args()
     
     print('gpu_to_use : {} ; esn_dir_idx : {} ; num_lyaptimesteps_totrain : {}'.format(args.gpu_to_use, args.esn_dir_idx, args.num_lyaptimesteps_totrain))
+    print('epochs : {}, patience : {}'.format(args.epochs, args.patience))
     
-    main(args.esn_dir_idx, args.num_lyaptimesteps_totrain, args.gpu_to_use)
+    main(args.esn_dir_idx, args.num_lyaptimesteps_totrain, args.gpu_to_use, args.epochs, args.patience)

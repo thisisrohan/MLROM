@@ -1,0 +1,9 @@
+   training_data_rnn_input.shape : (16, 20000, 2)
+  training_data_rnn_output.shape : (16, 20000, 2)
+    testing_data_rnn_input.shape : (2, 20000, 2)
+   testing_data_rnn_output.shape : (2, 20000, 2)
+        val_data_rnn_input.shape : (2, 20000, 2)
+       val_data_rnn_output.shape : (2, 20000, 2)
+
+ AR_testing_data_rnn_input.shape : (100, 11, 3)
+AR_testing_data_rnn_output.shape : (100, 110, 3)

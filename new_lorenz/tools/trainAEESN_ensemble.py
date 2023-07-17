@@ -414,8 +414,10 @@ def trainAERNN(
         else:
             baseline = AR_AERNN_net.evaluate(
                 val_data_rnn_input, val_data_rnn_output,
+                batch_size=batch_size
             )
             baseline = baseline[3] # val_NMSE_wt of RNN with loaded weights
+            baseline_og = baseline
             print('baseline : {:.4E}'.format(baseline))
 
         # time callback for each epoch
@@ -437,29 +439,29 @@ def trainAERNN(
 
         epochs_so_far = 0
         for i in range(0, starting_lr_idx):
-            if type(epochs) == type(list):
+            try:
                 if i < len(epochs):
                     epochs_i = epochs[i]
                 epochs_so_far += epochs_i
-            else:
+            except:
                 epochs_so_far += epochs
 
         for i in range(starting_lr_idx, len(learning_rate_list)):
             learning_rate = learning_rate_list[i]
-            if type(patience) == type([]):
+            try:
                 if i < len(patience):
                     patience_thislr = patience[i]
                 else:
                     patience_thislr = patience[-1]
-            else:
+            except:
                 patience_thislr = patience
             sum_patience += patience_thislr
-            if type(epochs) == type([]):
+            try:
                 if i < len(epochs):
                     epochs_thislr = epochs[i]
                 else:
                     epochs_thislr = epochs[-1]
-            else:
+            except:
                 epochs_thislr = epochs
             sum_epochs += epochs_thislr
                 
@@ -481,7 +483,8 @@ def trainAERNN(
                 restore_best_weights=True,
                 verbose=True,
                 min_delta=min_delta,
-                baseline=baseline
+                baseline=baseline,
+                mode="min",
             )
             #** the two lines below are useless because wait is set to 0 in on_train_begin
             # early_stopping_cb.wait = earlystopping_wait
@@ -551,11 +554,18 @@ def trainAERNN(
             
             epochs_so_far += epochs_thislr
             
-            baseline = None
+            baseline_contender = np.min(val_NMSE_wt_hist[lr_change[i]:lr_change[i+1]])
+            baseline = min(baseline, baseline_contender)
+            print('\nbaseline : {:.4E}'.format(baseline))
             
     if behaviour == 'initialiseAndTrainFromScratch' or behaviour == 'loadCheckpointAndContinueTraining':
-        if len(val_loss_hist) <= sum_patience + 1 and len(val_loss_hist) <= sum_epochs:
+        val_nmse_wt_last = np.min(val_NMSE_wt_hist[lr_change[-2]:lr_change[-1]])
+        if val_nmse_wt_last >= baseline_og:
+            print('reverting to original rnn and ae weights')
             AR_AERNN_net.rnn_net.load_weights_from_file(wt_file_rnn)
+            if use_ae_data == True:
+                AR_AERNN_net.ae_net.load_weights_from_file(wt_file_ae)
+        
         for i_en in range(len(AR_AERNN_net.rnn_net.rnn_list)):
             for layer in AR_AERNN_net.rnn_net.rnn_list[i_en]:
                 if layer.stateful == True:
@@ -564,23 +574,6 @@ def trainAERNN(
             testing_data_rnn_input, testing_data_rnn_output,
             batch_size=batch_size
         )
-        # print(testing_data_rnn_input.shape, testing_data_rnn_output.shape)
-        
-        # test_mse = 0.0
-        # for i in range(int(testing_data_rnn_input.shape[0]//batch_size)):
-        #     # i_test_loss = rnn_net.evaluate(
-        #     #     testing_data_rnn_input[i*batch_size:(i+1)*batch_size, :, :],
-        #     #     testing_data_rnn_output[i*batch_size:(i+1)*batch_size, :, :],
-        #     # )
-        #     data_in_i = testing_data_rnn_input[i*batch_size:(i+1)*batch_size, :, :]
-        #     data_out_i = testing_data_rnn_output[i*batch_size:(i+1)*batch_size, :, :]
-        #     temp = AR_AERNN_net.call(data_in_i, training=False)
-        #     i_test_mse = np.mean(
-        #         (
-        #             (data_out_i - temp.numpy()) * normalization_constant_arr_aedata[1, :] / time_stddev_ogdata
-        #         )**2
-        #     )
-        #     test_mse = (i*test_mse + i_test_mse)/(i+1)
 
         save_path = dir_name_AR_AErnn+'/final_net/{}_outsteps'.format(num_outsteps)
 

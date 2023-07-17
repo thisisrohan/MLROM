@@ -1,0 +1,2 @@
+model_checkpoint_path: "checkpoint-25_outsteps"
+all_model_checkpoint_paths: "checkpoint-25_outsteps"

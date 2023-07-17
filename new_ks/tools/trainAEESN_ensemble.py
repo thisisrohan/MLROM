@@ -561,7 +561,10 @@ def trainAERNN(
     if behaviour == 'initialiseAndTrainFromScratch' or behaviour == 'loadCheckpointAndContinueTraining':
         val_nmse_wt_last = np.min(val_NMSE_wt_hist[lr_change[-2]:lr_change[-1]])
         if val_nmse_wt_last >= baseline_og:
+            print('reverting to original rnn and ae weights')
             AR_AERNN_net.rnn_net.load_weights_from_file(wt_file_rnn)
+            if use_ae_data == True:
+                AR_AERNN_net.ae_net.load_weights_from_file(wt_file_ae)
         
         for i_en in range(len(AR_AERNN_net.rnn_net.rnn_list)):
             for layer in AR_AERNN_net.rnn_net.rnn_list[i_en]:

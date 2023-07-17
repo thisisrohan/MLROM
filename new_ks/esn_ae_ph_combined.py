@@ -464,7 +464,7 @@ def main(esn_dir_idx, gpu_to_use):
     print(os.getcwd())
 
     from tools.misc_tools import create_data_for_RNN, readAndReturnLossHistories
-    from tools.ae_v2 import Autoencoder
+    from tools.ae_v1 import Autoencoder
     from tools.ESN_v1_ensembleAR import ESN_ensemble as AR_RNN
     from tools.AEESN_AR_v1 import AR_AERNN_ESN as AR_AERNN
 
@@ -759,8 +759,8 @@ def main(esn_dir_idx, gpu_to_use):
             load_dir = dir_name_AR_AErnn + '/final_net/{}_outsteps'.format(num_outsteps_kk)
             load_file_rnn, wt_file_rnn = find_and_return_load_wt_file_lists(
                 load_dir,
-                wt_matcher='rnn_weights.hdf5',
-                classdict_matcher='rnn_class_dict.txt',
+                wt_matcher='ESN_weights.hdf5',
+                classdict_matcher='ESN_class_dict.txt',
             )
 
             load_file_ae = dir_name_AR_AErnn+'/final_net/{}_outsteps/final_net-{}_outsteps_ae_class_dict.txt'.format(
