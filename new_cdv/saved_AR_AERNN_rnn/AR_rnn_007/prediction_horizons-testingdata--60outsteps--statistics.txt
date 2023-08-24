@@ -1,11 +1,5 @@
-ORIGINAL (multi-point) ERROR; error_threshold = 0.5
-prediction_horizon : 1.2263601037540959, median : 1.0428462505694684
-ph_min : 0.0, ph_max : 4.848557892258048
-stddev : 0.8958122034202144, IQR : 0.7584336367777954
-1st quartile : 0.6500859743809674, 3rd quartile : 1.4085196111587628
-
-NEW (cumulative) ERROR; error_threshold = 0.5
-prediction_horizon : 1.2422059493796318, median : 1.029302792769865
-ph_min : 0.0, ph_max : 4.92981863905567
-stddev : 0.9152894435684892, IQR : 0.7719770945773987
-1st quartile : 0.6229990587817604, 3rd quartile : 1.3949761533591591
+error_threshold = 0.5, num_runs : 100
+prediction_horizon : 1.331457336279019, median : 1.083476623968279
+ph_min : 0.0, ph_max : 4.171385002277874
+stddev : 0.8637662227816292, IQR : 0.8938682147738302
+1st quartile : 0.7042598055793814, 3rd quartile : 1.5981280203532116

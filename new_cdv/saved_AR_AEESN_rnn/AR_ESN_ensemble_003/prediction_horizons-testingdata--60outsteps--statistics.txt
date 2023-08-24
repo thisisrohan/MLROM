@@ -1,4 +1,4 @@
-error_threshold = 0.5
+error_threshold = 0.5, num_runs : 100
 prediction_horizon : 3.5708680834434556, median : 3.2910602453036475
 ph_min : 0.9209551303730371, ph_max : 8.600095702748215
 stddev : 1.6205619889708915, IQR : 2.2617574525337827

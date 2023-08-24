@@ -1,0 +1,8 @@
+error_threshold = 0.5, num_runs : 50
+prediction_horizon : 3.0120650146318155, median : 2.6409742709226802
+ph_min : 1.0428462505694684, ph_max : 7.015511140194606
+stddev : 1.295196494284116, IQR : 1.1241069973670896
+1st quartile : 2.2617574525337822, 3rd quartile : 3.385864449900872
+
+total compute time : 45.6 s., num_iterations : 1776
+total chaos time : 888.0

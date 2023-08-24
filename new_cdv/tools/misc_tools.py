@@ -178,15 +178,25 @@ def create_CDV_data(
         params_mat,
         init_state_mat, return_params_arr=False,
         normalize=False,
-        stddev_multiplier_for_norm=None, FTYPE=FTYPE, ITYPE=ITYPE):
+        stddev_multiplier_for_norm=None, alldata_withparams=False,
+        FTYPE=FTYPE, ITYPE=ITYPE):
 
     if len(params_mat.shape) == 1:
         params_mat = params_mat.reshape((1, params_mat.shape[0]))
+        if len(init_state_mat.shape) == 1:
+            init_state_mat = init_state_mat.reshape((1, init_state_mat.shape[0]))
+    else:
+        if len(init_state_mat.shape) == 1:
+            init_state_mat = np.tile(init_state_mat, (params_mat.shape[0], 1))
+
     N = int(((T-t0) + 0.5*delta_t) // delta_t)
+    cols = 6
+    if alldata_withparams == True:
+        cols += 6
     all_data = np.empty(
         shape=(
             params_mat.shape[0]*(N+1),
-            6+6
+            cols
         ),
         dtype=FTYPE
     )
@@ -196,10 +206,9 @@ def create_CDV_data(
         dtype=ITYPE
     )
 
+    params_arr = None
     if return_params_arr == True:
         params_arr = np.empty(shape=(boundary_idx_arr.shape[0], 6), dtype=FTYPE)
-    else:
-        params_arr = None
 
     counter = 0
     for ii in range(params_mat.shape[0]):
@@ -220,15 +229,10 @@ def create_CDV_data(
             X[jj, :] = X_next
 
         # storing data
-        idx = counter # = len(beta_arr)*len(sigma_arr)*i + len(beta_arr)*j + k
+        idx = counter
         all_data[idx*(N+1):(idx+1)*(N+1), 0:6] = X[:, :]
-        # if normalize == True:
-        #     normalization_constant = (2*beta*(rho-1) + (rho-1)**2)**0.5
-        #     normalization_constant_arr[counter] = normalization_constant
-        #     all_data[idx*(N+1):(idx+1)*(N+1), 0:3] /= normalization_constant
-        # for jj in range(idx*(N+1), (idx+1)*(N+1)):
-        #     all_data[jj, :] = params
-        all_data[idx*(N+1):(idx+1)*(N+1), 6:] = params[:]
+        if alldata_withparams == True:
+            all_data[idx*(N+1):(idx+1)*(N+1), 6:] = params[:]
 
         boundary_idx_arr[counter] = (idx+1)*(N+1)
         counter += 1
@@ -1516,7 +1520,7 @@ def compute_lyapunov_spectrum(
         create_data_fn, cdf_kwargs, num_modes, 
         init_state_mat, params_mat, dy_mat,
         zeta=10, delta_completionratio=0.1, num_exp=None,
-        print_flag=True, FTYPE=np.float64, ITYPE=np.int64):
+        print_flag=True, FTYPE=np.float64, ITYPE=np.int64, num_init_ignore=0):
     '''
     Computing the Lyapunov spectrum
     '''
@@ -1623,7 +1627,7 @@ def compute_lyapunov_spectrum(
                 completion_ratio += delta_completionratio
 
         for j in range(num_exp):
-            lyap_coeffs[ii, j] = np.sum(np.log(Rjj_mat[ii, :, j])) / (zeta*xi*delta_t)
+            lyap_coeffs[ii, j] = np.sum(np.log(Rjj_mat[ii, num_init_ignore:, j])) / (zeta*delta_t*(xi-num_init_ignore))
         if print_flag == True:
             print('case {} MLE : {}\n'.format(ii+1, np.round(lyap_coeffs[ii, :].max(), 6)))
 

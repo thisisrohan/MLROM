@@ -1,0 +1,4 @@
+num_latent_states : 05, 05
+      contractive : False, True
+               AE : 1.9113E-06, 1.7454E-06
+              POD : 

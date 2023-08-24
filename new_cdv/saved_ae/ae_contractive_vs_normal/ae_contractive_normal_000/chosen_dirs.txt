@@ -1,0 +1,3 @@
+dir_name, num_latent_states
+ae_008, 5, False
+test_ae_010, 5, True

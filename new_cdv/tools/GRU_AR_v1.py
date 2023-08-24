@@ -231,6 +231,7 @@ class AR_RNN_GRU(Model):
             self.in_steps = int((self.T_input+0.5*self.dt_rnn)//self.dt_rnn)
         if T_output is not None:
             self.out_steps = int((self.T_output+0.5*self.dt_rnn)//self.dt_rnn)
+        self.num_outsteps = self.out_steps
 
         if isinstance(self.dense_layer_act_func, list) == False:
             self.dense_layer_act_func = [self.dense_layer_act_func]

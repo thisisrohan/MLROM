@@ -241,8 +241,52 @@ class AR_AERNN_GRU(Model):
 
         return return_tuple
 
+    def call_post_warmup(self, warmup_tuple, training=False, usenoiseflag=False):
+        predictions_list = []
+
+        x = warmup_tuple[0]
+        states_list = warmup_tuple[1]
+        if len(warmup_tuple) > 2:
+            intermediate_outputs_lst = warmup_tuple[2]
+            scalar_multiplier_list = warmup_tuple[3]
+        else:
+            intermediate_outputs_lst = None
+            scalar_multiplier_list = None
+
+        predictions_list.append(x[:, -1, :])
+
+        ### Passing input through the GRU layers
+        for tstep in range(1, self.rnn_net.out_steps):
+            x = self.ae_net.encoder_net(predictions_list[-1])
+            og_shape = x.shape[1:]
+            x = tf.reshape(
+                x,
+                (-1, 1, np.prod(og_shape))
+            )
+            x = self.normalization_preRNN(x)
+
+            x, states_list = self.rnn_net.onestep(
+                x=x,
+                training=training,
+                states_list=states_list,
+                intermediate_outputs_lst=intermediate_outputs_lst,
+                scalar_multiplier_list=scalar_multiplier_list,
+            )
+
+            x = self.reverseNormalization_postRNN(x)
+            # x = tf.reshape(x, (-1,) + tuple(self.ls_shape))
+            x = x[:, -1, :]
+            x = self.ae_net.decoder_net(x)
+
+            predictions_list.append(x)
+
+        output = tf.stack(predictions_list)
+        output = tf.transpose(output, [1, 0, 2])#, 3, 4])
+    
+        return output, states_list, intermediate_outputs_lst, scalar_multiplier_list
+
     # @tf.function
-    def call(self, inputs, training=None, usenoiseflag=False):
+    def call(self, inputs, training=None, usenoiseflag=False, return_res=False):
 
         predictions_list = []
 
@@ -252,7 +296,7 @@ class AR_AERNN_GRU(Model):
             training=False,
             usenoiseflag=usenoiseflag,
         )
-        
+        '''
         x = warmup_tuple[0]
         states_list = warmup_tuple[1]
         if len(warmup_tuple) > 2:
@@ -312,6 +356,14 @@ class AR_AERNN_GRU(Model):
         output = tf.transpose(output, [1, 0, 2])
 
         return output
+        '''
+        
+        res_tuple = self.call_post_warmup(warmup_tuple, training, usenoiseflag)
+        
+        if return_res == False:
+            return res_tuple[0]
+        else:
+            return res_tuple
 
     def _warmup_upto_tinputminusone(self, inputs, training=False, usenoiseflag=False):
         ### Initialize the GRU state.

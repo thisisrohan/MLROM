@@ -1,0 +1,3 @@
+num_latent_states : 05, 05
+      contractive : False, True
+               AE : 1.9663E-01, 1.8480E-01
