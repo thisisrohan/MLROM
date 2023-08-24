@@ -258,7 +258,12 @@ def trainAE_and_return_testError(
             batch_size=batch_size,
 #             validation_split=val_split/train_split,
             validation_data=(val_data, val_data),
-            callbacks=[early_stopping_cb, timekeeper_cb, checkpoint_cb, savelosses_cb],
+            callbacks=[
+                early_stopping_cb,
+                timekeeper_cb,
+                # checkpoint_cb,
+                # savelosses_cb
+            ],
             verbose=1,
             shuffle=True,
         )
@@ -345,7 +350,7 @@ def trainAE_and_return_testError(
         legend_kwargs=legend_kwargs,
     )
 
-    plt.savefig(dir_name_plot + '{ds}loss_history.png'.format(ds=dir_sep), dpi=300, bbox_inches='tight')
+    plt.savefig(dir_name_plot + '{ds}loss_history.pdf'.format(ds=dir_sep), dpi=300, bbox_inches='tight')
     # plt.show()
 
 
@@ -361,7 +366,7 @@ def trainAE_and_return_testError(
         ylabel_kwargs=ylabel_kwargs,
         legend_kwargs=legend_kwargs,
     )
-    plt.savefig(dir_name_plot+'/MSE_history.png', dpi=300, bbox_inches='tight')
+    plt.savefig(dir_name_plot+'/MSE_history.pdf', dpi=300, bbox_inches='tight')
     # plt.show()
     plt.clf()
 
@@ -378,7 +383,7 @@ def trainAE_and_return_testError(
         ylabel_kwargs=ylabel_kwargs,
         legend_kwargs=legend_kwargs,
     )
-    plt.savefig(dir_name_plot+'/NMSE_history.png', dpi=300, bbox_inches='tight')
+    plt.savefig(dir_name_plot+'/NMSE_history.pdf', dpi=300, bbox_inches='tight')
     # plt.show()
     plt.clf()
 
@@ -396,7 +401,7 @@ def trainAE_and_return_testError(
         ylabel_kwargs=ylabel_kwargs,
         legend_kwargs=legend_kwargs,
     )
-    plt.savefig(dir_name_plot+'/train_ls_jacobian_norm_hist.png', dpi=300, bbox_inches='tight')
+    plt.savefig(dir_name_plot+'/train_ls_jacobian_norm_hist.pdf', dpi=300, bbox_inches='tight')
     # plt.show()
     plt.clf()
 
@@ -413,7 +418,7 @@ def trainAE_and_return_testError(
         ylabel_kwargs=ylabel_kwargs,
         legend_kwargs=legend_kwargs,
     )
-    plt.savefig(dir_name_plot+'/real_MSE_history.png', dpi=300, bbox_inches='tight')
+    plt.savefig(dir_name_plot+'/real_MSE_history.pdf', dpi=300, bbox_inches='tight')
     # plt.show()
     plt.clf()
 
@@ -431,7 +436,7 @@ def trainAE_and_return_testError(
         legend_kwargs=legend_kwargs,
         
     )
-    plt.savefig(dir_name_plot+'/params_MSE_history.png', dpi=300, bbox_inches='tight')
+    plt.savefig(dir_name_plot+'/params_MSE_history.pdf', dpi=300, bbox_inches='tight')
     # plt.show()
     plt.clf()
     

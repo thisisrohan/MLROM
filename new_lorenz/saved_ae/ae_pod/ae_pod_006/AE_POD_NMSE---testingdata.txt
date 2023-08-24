@@ -1,0 +1,3 @@
+num_latent_states : 02
+               AE : 2.8679E-03
+              POD : 4.0787E-02
